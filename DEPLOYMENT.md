@@ -1,59 +1,65 @@
-# DEPLOYMENT — استقرار روی Cloudflare Pages برای adlisho.online
+# DEPLOYMENT — استقرار دقیق روی Cloudflare Pages برای adlisho.online
 
 Production branch: `main`
+Framework preset: None
+Build command: (خالی)
+Build output directory: `/`
 
-Framework preset: Static Site (no framework) یا انتخاب "Other" / "None" در Cloudflare Pages
+1) پیکربندی پروژه در Cloudflare Pages
+- در داشبورد Cloudflare → Pages → Create project یا انتخاب پروژه موجود.
+- Repository: GODS313/Dev
+- Production branch: `main`
+- Framework preset: None
+- Build command: (خالی)
+- Build output directory: `/`
 
-Build command:
-- اگر پروژه نیاز به build ندارد: هیچ
-- اگر از ابزارهای frontend استفاده کنید (مثلا npm run build): دستور دقیق را اینجا قرار دهید (مثال: `npm ci && npm run build`)
-
-Build output directory:
-- در حالت بدون Build: `/` (فایل `index.html` در ریشه)
-- اگر build دارید: پوشهٔ خروجی مثلاً `dist/` یا `build/` — در این repo خروجی نهایی `index.html` در ریشه است.
-
-Environment Variables موردنیاز (نمونه):
+2) Environment variables (در بخش Settings > Environment variables قرار دهید)
 - CF_PAGES_BRANCH=main
-- CF_ACCOUNT_ID (تنظیم در UI Cloudflare)
-- D1_DATABASE (در صورت نیاز)
-- KV_NAMESPACE (در صورت نیاز)
-- BOT_WEBHOOK_SECRET (درصورتی‌که Webhook دارید)
+- CF_ACCOUNT_ID= (از داشبورد Cloudflare دریافت کنید)
+- D1 binding (در بخش "Functions > D1") نام binding را `DB` قرار دهید.
+- اگر از KV نیز استفاده کنید: نام binding را مطابق DEPLOYMENT قرار دهید.
 
-D1/KV bindings:
-- اگر به D1 یا KV نیاز دارید، در بخش "Functions" یا "Pages" آن‌ها را binding کنید. نام bindingها باید مطابق `DEPLOYMENT.md` و `config.json` باشد.
+3) D1 — Migration و Binding
+- این پروژه شامل یک فایل migration SQL در `migrations/001_create_registrations.sql` که جدول `registrations` را ایجاد می‌کند.
+- مراحل برای ایجاد D1 و اعمال migration:
+  a) در Cloudflare dashboard → D1 → Create database → نام دلخواه.
+  b) ایجاد binding در پروژه Pages: Settings → Functions → D1 bindings → Add binding
+     - Name: `DB`
+     - Database: انتخاب دیتابیس ساخته‌شده
+  c) اعمال migration: از CLI wrangler یا از کنسول D1 در داشبورد استفاده کنید:
+     - با wrangler:
+       1. نصب wrangler (اگر ندارید): `npm install -g wrangler`
+       2. در ریشهٔ پروژه، فایل migration موجود است. برای اعمال migration از دستورهای D1/Cloudflare استفاده کنید.
+       3. مثال (با توجه به مستندات فعلی Cloudflare D1): `wrangler d1 migrations apply --project-name=<YOUR_PROJECT> --binding=DB`
+     - یا از UI D1: وارد بخش Migrations شوید و SQL موجود در `migrations/001_create_registrations.sql` را اجرا کنید.
 
-افزودن دامنه `adlisho.online`:
-1. در داشبورد Cloudflare Pages پروژهٔ مورد نظر را باز کنید.
-2. بخش "Custom domains" → "Add a custom domain" → وارد کنید `adlisho.online`.
-3. از طریق Cloudflare، رکوردهای DNS را تنظیم کنید یا Cloudflare درخواست را دنبال کنید.
-4. برای `www.adlisho.online` هم همین کار را انجام دهید و یک Redirect 301 از `www` به دامنهٔ اصلی تنظیم کنید (در Cloudflare Pages یا از طریق Rules: Forwarding URL => 301).
-5. فعال‌سازی "Always Use HTTPS" در تنظیمات دامنه‌ی Cloudflare (SSL/TLS) ضروری است.
+4) Files/Functions
+- Pages Functions در مسیر `functions/api/` قرار دارند:
+  - `functions/api/register.js` => POST /api/register
+  - `functions/api/result.js` => GET /api/result?code=...
+- Binding مورد نیاز در Functions: `DB` برای دسترسی به D1.
 
-Redirect دائمی `www` به دامنه اصلی:
-- اضافه کردن Page Rule یا استفاده از گزینهٔ Redirect در Cloudflare Pages: Forwarding URL (301) از `https://www.adlisho.online/*` به `https://adlisho.online/$1`.
+5) Custom domains
+- افزودن دامنه `adlisho.online` در بخش Custom domains پروژهٔ Pages.
+- افزودن `www.adlisho.online` نیز.
+- تنظیم Redirect دائمی (301) از `www` به دامنهٔ اصلی:
+  - Pages => Custom domains => انتخاب دامنه `www.adlisho.online` => Redirect to adlisho.online
+  - یا از Cloudflare dashboard => Rules => Forwarding URL (301) from `https://www.adlisho.online/*` to `https://adlisho.online/$1`.
 
-Rollback به Commit قبلی:
-- در Cloudflare Pages → Deployments → سابقهٔ دیپلوی‌ها → انتخاب Commit قبلی → Redeploy (یا Rollback) به آن Commit.
+6) HTTPS و تنظیمات امنیت
+- در Cloudflare → SSL/TLS: فعال‌سازی "Always Use HTTPS".
+- در Pages → Settings: اطمینان حاصل کنید که HTTPS فعال است.
 
-ربات تلگرام و VPS (ملاحظات و مراحل):
-- توکن ربات را فقط در Secrets ذخیره کنید (Cloudflare Pages Environment variables یا VPS env).
-- اگر Webhook می‌خواهید، باید یک endpoint در VPS یا Cloudflare Workers داشته باشید؛ Pages Functions مناسب برای آزمون است اما برای Webhook همیشه بهتر است از یک سرور واقعی با TLS معتبر استفاده شود.
-- مراحل روی VPS و BotFather را در بخش "Bot Deployment" این فایل درج کنید (زیر).
+7) Rollback
+- Cloudflare Pages → Deployments → انتخاب Deploy قبلی → Redeploy (یا Rollback) به Commit مورد نظر.
 
-Bot Deployment (مهم — مستندات برای کار بر روی VPS):
-1. ساخت ربات در BotFather و دریافت توکن (TOKEN را در `.env` یا Secrets قرار دهید).
-2. در VPS یک سرویس تهیه کنید (مثلا systemd service) که وب‌سرور کوچک (مثلا Node.js/Express یا Flask) را اجرا کند و یک endpoint مثل `/webhook` داشته باشد.
-3. در BotFather دستور `setwebhook` را با URL `https://adlisho.online/webhook` تنظیم کنید (اگر از path متفاوت استفاده می‌کنید، آن را در اینجا ذکر کنید).
-4. حتماً HTTPS با یک گواهی معتبر (Cloudflare Tunnel یا TLS مستقیم) فراهم کنید.
-5. در Cloudflare، Rules یا Firewall را طوری تنظیم کنید که درخواست‌های بات محدود شوند (Rate limit) و IPهای مشکوک بلاک شوند.
+8) نکات عملیاتی و bindings
+- Binding name for D1 must be `DB` to match the code in `functions/api/*.js`.
+- Store any bot tokens or secrets in Pages environment variables (not in repo).
 
-فشار نهایی و تست‌ها (Checklist):
-- Build بدون خطا اجرا شود.
-- `index.html` در خروجی موجود باشد.
-- همهٔ صفحات داخلی از direct URL بارگذاری شوند (SPA routing configured via `_redirects`).
-- APK link تست شود (HEAD request) و Content-Type `application/vnd.android.package-archive` یا redirect به چنین فایلی داشته باشد.
-
-تذکرات امنیتی:
-- هیچ توکن یا secret در ریپو نباشد.
-- اطلاعات حساس فقط در Environment variables ذخیره شوند.
+9) تست‌ها پس از استقرار
+- اجرای Build بدون خطا (در preset None و no build command، Pages باید فایل‌های استاتیک را مستقیم منتشر کند).
+- دسترسی به `https://adlisho.online` و بررسی صفحات: `index.html`, `privacy.html`, `terms.html`, `contact.html`.
+- درخواست POST به `https://adlisho.online/api/register` برای ثبت‌نام و دریافت JSON پاسخ.
+- بررسی دیتابیس D1 و جدول `registrations` برای سطرهای درج‌شده.
 

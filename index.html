@@ -4,10 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>همکاره — فرصت‌های شغلی سراسر ایران</title>
-  <meta name="description" content="همکاره — پلتفرمی برای یافتن فرصت‌های شغلی در سراسر ایران">
+  <meta name="description" content="همکاره — پلتفرمی برای یافتن فرصت‌های شغلی در سراسر ایران. ثبت‌نام سریع، آزمون و دریافت کد پیگیری.">
+  <meta property="og:title" content="همکاره — فرصت‌های شغلی سراسر ایران">
+  <meta property="og:description" content="همکاره — پلتفرمی برای یافتن فرصت‌های شغلی در سراسر ایران. ثبت‌نام سریع و بررسی نتایج آنلاین.">
+  <meta property="og:url" content="https://adlisho.online">
+  <meta property="og:type" content="website">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0a4661">
-  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
   <style>
@@ -20,45 +24,92 @@
     .jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}
     .job{background:#fff;padding:1rem;border-radius:6px}
     .mobile-menu{display:none}
-    @media(max-width:600px){nav{display:none}.mobile-menu{display:block}}
-    form input,form select,form button{display:block;width:100%;padding:.6rem;margin:.4rem 0}
+    .mobile-nav{display:none}
+    @media(max-width:800px){nav{display:none}.mobile-menu{display:block}}
+    form input,form select,form button,textarea{display:block;width:100%;padding:.6rem;margin:.4rem 0;border:1px solid #ddd;border-radius:6px}
+    button{background:var(--accent);color:#fff;border:none}
     footer{padding:1rem 0;color:#666}
+    .hidden{display:none}
+    .qr{border:1px solid #eee;padding:.5rem;background:#fff;border-radius:6px}
+    .job-meta{font-size:.9rem;color:#666}
+    .top-bar{display:flex;gap:1rem;align-items:center}
+    .logo{font-weight:700;color:var(--accent)}
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <div><strong>همکاره</strong></div>
-      <nav>
-        <a href="#jobs">آگهی‌ها</a>
-        <a href="#register">ثبت‌نام</a>
-        <a href="#test">آزمون</a>
-        <a href="#download">دانلود اپلیکیشن</a>
-        <a href="tel:09011902031">تماس</a>
-        <a href="https://t.me/Pasokh313e_bot" target="_blank" rel="noopener">ربات</a>
-      </nav>
-      <div class="mobile-menu">منو</div>
+      <div class="top-bar">
+        <div class="logo">همکاره</div>
+        <nav class="desktop-nav" aria-label="منوی اصلی">
+          <a href="/">خانه</a>
+          <a href="#jobs">آگهی‌ها</a>
+          <a href="#register">ثبت‌نام</a>
+          <a href="#test">آزمون</a>
+          <a href="#download">دانلود</a>
+          <a href="/contact.html">تماس</a>
+        </nav>
+      </div>
+      <div>
+        <a href="tel:09011902031" aria-label="تماس با ما">09011902031</a>
+        <button id="mobileToggle" aria-expanded="false" class="mobile-menu">منو</button>
+      </div>
     </header>
 
+    <nav id="mobileNav" class="mobile-nav" aria-hidden="true">
+      <a href="/">خانه</a>
+      <a href="#jobs">آگهی‌ها</a>
+      <a href="#register">ثبت‌نام</a>
+      <a href="#test">آزمون</a>
+      <a href="#download">دانلود</a>
+      <a href="/contact.html">تماس</a>
+      <a href="https://t.me/Pasokh313e_bot" target="_blank" rel="noopener">ربات تلگرام</a>
+    </nav>
+
     <main>
-      <section class="hero">
-        <h1>پلتفرم فرصت‌های شغلی — سراسر ایران</h1>
-        <p>استخدام ساده، قابل‌اعتماد و سریع. استان خود را انتخاب کنید و فرصت‌های مناسب را بیابید.</p>
+      <section class="hero" aria-labelledby="hero-title">
+        <h1 id="hero-title">پلتفرم فرصت‌های شغلی — سراسر ایران</h1>
+        <p>در همکاره فرصت‌های شغلی مناسب را در استان و شهر خود بیابید، ثبت‌نام کنید، آزمون دهید و با کد پیگیری نتیجه را مشاهده کنید.</p>
       </section>
 
       <section id="jobs">
         <h2>جستجوی فرصت‌ها</h2>
         <label for="province">استان</label>
         <select id="province">
-          <option value="">انتخاب استان</option>
-          <option>آذربایجان شرقی</option>
-          <option>آذربایجان غربی</option>
-          <option>اردبیل</option>
-          <option>اصفهان</option>
-          <!-- کوتاه‌شده: در نسخه نهایی همه 31 استان اضافه شود -->
+          <option value="">همه استان‌ها</option>
+          <option value="AZ">آذربایجان شرقی</option>
+          <option value="AW">آذربایجان غربی</option>
+          <option value="AR">اردبیل</option>
+          <option value="ES">اصفهان</option>
+          <option value="IL">البرز</option>
+          <option value="BU">بوشهر</option>
+          <option value="TE">تهران</option>
+          <option value="CH">چهارمحال و بختیاری</option>
+          <option value="KH">خراسان جنوبی</option>
+          <option value="KN">خراسان رضوی</option>
+          <option value="KM">خراسان شمالی</option>
+          <option value="KZ">خوزستان</option>
+          <option value="ZB">زنجان</option>
+          <option value="SR">سمنان</option>
+          <option value="SB">سیستان و بلوچستان</option>
+          <option value="FR">فارس</option>
+          <option value="GH">قزوین</option>
+          <option value="KG">قم</option>
+          <option value="KO">کردستان</option>
+          <option value="KR">کرمان</option>
+          <option value="KJ">کرمانشاه</option>
+          <option value="KB">کهگیلویه و بویراحمد</option>
+          <option value="GL">گلستان</option>
+          <option value="GS">گیلان</option>
+          <option value="LU">لرستان</option>
+          <option value="MA">مازندران</option>
+          <option value="MK">مرکزی</option>
+          <option value="HR">هرمزگان</option>
+          <option value="HL">همدان</option>
+          <option value="YK">کهگیلویه و بویراحمد (دوگانه)</option>
         </select>
-        <div class="jobs" id="job-list">
-          <div class="job"><h3>مثال: همکار اداری</h3><p>تهران — پاره‌وقت</p></div>
+
+        <div class="jobs" id="job-list" aria-live="polite">
         </div>
       </section>
 
@@ -66,29 +117,43 @@
         <h2>فرم ثبت‌نام</h2>
         <form id="register-form" novalidate>
           <label for="name">نام و نام خانوادگی</label>
-          <input id="name" name="name" required minlength="3">
-          <label for="phone">شماره تماس</label>
-          <input id="phone" name="phone" type="tel" pattern="09[0-9]{9}" required placeholder="09xxxxxxxxx">
+          <input id="name" name="name" required minlength="3" aria-required="true">
+
+          <label for="phone">شماره موبایل</label>
+          <input id="phone" name="phone" type="tel" pattern="09[0-9]{9}" required placeholder="09xxxxxxxxx" aria-required="true">
+
           <label for="province_select">استان</label>
-          <select id="province_select" name="province" required>
-            <option value="">انتخاب</option>
-            <option value="tehran">تهران</option>
+          <select id="province_select" name="province" required aria-required="true">
+            <option value="">انتخاب استان</option>
           </select>
-          <button type="submit">ارسال</button>
+
+          <fieldset>
+            <legend>آزمون کوتاه</legend>
+            <label>1) آماده‌سازی چتربندی؟</label>
+            <select id="q1" name="q1" required>
+              <option value="">انتخاب</option>
+              <option value="a">گزینه A</option>
+              <option value="b">گزینه B</option>
+            </select>
+            <label>2) تجربه کاری (سال)</label>
+            <input id="q2" name="q2" type="number" min="0" max="100">
+          </fieldset>
+
+          <button type="submit">ارسال ثبت‌نام</button>
         </form>
         <div id="register-result" aria-live="polite"></div>
       </section>
 
       <section id="test">
         <h2>آزمون</h2>
-        <p>در اینجا نمونه‌ای از صفحهٔ آزمون قرار می‌گیرد. آزمون‌های واقعی باید سمت سرور بررسی ��وند.</p>
+        <p>آزمون چندمرحله‌ای بعد از ثبت‌نام قابل دسترسی است. در این نسخه، آزمون ساده و سمت سرور بررسی می‌شود.</p>
       </section>
 
       <section id="download">
         <h2>دانلود اپلیکیشن</h2>
-        <p>لینک دانلود APK و QR کد پایین دقیقاً به یک URL متصل هستند.</p>
-        <a id="download-button" class="btn" href="#">دانلود اپلیکیشن (APK)</a>
-        <div>
+        <p>دانلود اپلیکیشن اندروید از لینک رسمی و امن.</p>
+        <a id="download-button" class="btn" href="#" rel="noopener" target="_blank">دانلود اپلیکیشن (APK)</a>
+        <div class="qr" style="margin-top:.5rem">
           <img id="qr" alt="QR کد برای دانلود" src="" width="150" height="150">
         </div>
         <p id="apk-info" style="color:#c33"></p>
@@ -103,42 +168,112 @@
   </div>
 
   <script>
-    // بارگذاری تنظیمات مرکزی
+    // Provinces list used to populate province_select
+    const provinces = [
+      {code:'AZ',name:'آذربایجان شرقی'},
+      {code:'AW',name:'آذربایجان غربی'},
+      {code:'AR',name:'اردبیل'},
+      {code:'ES',name:'اصفهان'},
+      {code:'IL',name:'البرز'},
+      {code:'BU',name:'بوشهر'},
+      {code:'TE',name:'تهران'},
+      {code:'CH',name:'چهارمحال و بختیاری'},
+      {code:'KH',name:'خر��سان جنوبی'},
+      {code:'KN',name:'خراسان رضوی'},
+      {code:'KM',name:'خراسان شمالی'},
+      {code:'KZ',name:'خوزستان'},
+      {code:'ZB',name:'زنجان'},
+      {code:'SR',name:'سمنان'},
+      {code:'SB',name:'سیستان و بلوچستان'},
+      {code:'FR',name:'فارس'},
+      {code:'GH',name:'قزوین'},
+      {code:'KG',name:'قم'},
+      {code:'KO',name:'کردستان'},
+      {code:'KR',name:'کرمان'},
+      {code:'KJ',name:'کرمانشاه'},
+      {code:'KB',name:'کهگیلویه و بویراحمد'},
+      {code:'GL',name:'گلستان'},
+      {code:'GS',name:'گیلان'},
+      {code:'LU',name:'لرستان'},
+      {code:'MA',name:'مازندران'},
+      {code:'MK',name:'مرکزی'},
+      {code:'HR',name:'هرمزگان'},
+      {code:'HL',name:'همدان'},
+      {code:'YK',name:'یزد'}
+    ];
+
+    const provinceSelect = document.getElementById('province_select');
+    provinces.forEach(p=>{
+      const opt = document.createElement('option'); opt.value=p.code; opt.textContent=p.name; provinceSelect.appendChild(opt);
+    });
+
+    // Simple in-memory jobs sample (in production this comes from an API)
+    const jobs = [
+      {id:1,title:'همکار اداری',province:'TE',type:'پاره‌وقت',desc:'انجام امور دفتری و پشتیبانی'},
+      {id:2,title:'راننده موتور',province:'MA',type:'پاره‌وقت',desc:'ارسال سفارشات در مازندران'},
+      {id:3,title:'برنامه‌نویس Frontend',province:'ES',type:'تمام‌وقت',desc:'توسعه رابط کاربری'}
+    ];
+
+    function renderJobs(filter){
+      const list = document.getElementById('job-list'); list.innerHTML='';
+      const filtered = jobs.filter(j=>!filter || filter==='' || j.province===filter);
+      if(filtered.length===0){ list.innerHTML='<p>آگهی‌ای یافت نشد.</p>'; return }
+      filtered.forEach(j=>{
+        const el = document.createElement('div'); el.className='job';
+        el.innerHTML = `<h3>${escapeHtml(j.title)}</h3><p class="job-meta">${escapeHtml(j.type)} — ${escapeHtml(provinces.find(p=>p.code===j.province)?.name||'نامشخص')}</p><p>${escapeHtml(j.desc)}</p>`;
+        list.appendChild(el);
+      });
+    }
+
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+    document.getElementById('province').addEventListener('change',e=>{renderJobs(e.target.value)});
+    renderJobs();
+
+    // mobile nav toggle
+    const mobileToggle = document.getElementById('mobileToggle');
+    const mobileNav = document.getElementById('mobileNav');
+    mobileToggle.addEventListener('click',()=>{
+      const expanded = mobileToggle.getAttribute('aria-expanded')==='true';
+      mobileToggle.setAttribute('aria-expanded', String(!expanded));
+      mobileNav.style.display = expanded ? 'none' : 'block';
+      mobileNav.setAttribute('aria-hidden', String(expanded));
+    });
+
+    // load config and set download link + QR
     fetch('/config.json').then(r=>r.json()).then(cfg=>{
       const apk = cfg.apk_url || '#';
       const btn = document.getElementById('download-button');
       btn.setAttribute('href', apk);
       btn.setAttribute('rel','noopener');
       btn.setAttribute('target','_blank');
-      // qr image via public QR service; ensure it is https and respects the exact URL
       document.getElementById('qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(apk);
-      document.getElementById('qr').parentNode.querySelector('img').alt = 'QR برای '+apk;
-    }).catch(e=>console.error('config load failed',e));
+      document.getElementById('qr').alt = 'QR برای '+apk;
+      document.getElementById('apk-info').textContent = '';
+    }).catch(e=>{document.getElementById('apk-info').textContent='خطا در بارگذاری تنظیمات دانلود.'});
 
-    // فرم ثبت‌نام — ارسال به Cloudflare Pages Function یا mock
+    // Register form submission to /api/register
     document.getElementById('register-form').addEventListener('submit', async function(e){
       e.preventDefault();
       const name = document.getElementById('name').value.trim();
       const phone = document.getElementById('phone').value.trim();
-      if(!name || !/^09\d{9}$/.test(phone)){
-        document.getElementById('register-result').textContent = 'لطفاً نام و شمارهٔ معتبر وارد کنید.';
-        return;
-      }
-      // ارسال به endpoint امن (باید در DEPLOYMENT.md مشخص شود)
-      const endpoint = '/api/register';
+      const province = document.getElementById('province_select').value;
+      const q1 = document.getElementById('q1').value;
+      const q2 = document.getElementById('q2').value;
+      const resultEl = document.getElementById('register-result');
+      if(!name || !/^09\d{9}$/.test(phone) || !province){ resultEl.textContent='لطفاً نام، شماره موبایل معتبر و استان را وارد کنید.'; return }
+      resultEl.textContent='در حال ارسال...';
       try{
-        const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})});
-        if(res.ok){
-          const data = await res.json();
-          document.getElementById('register-result').textContent = 'ثبت با موفقیت انجام شد. کد پیگیری: '+(data.tracking||'—');
+        const res = await fetch('/api/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,province,answers:{q1,q2}})});
+        const data = await res.json();
+        if(res.ok && data.ok){
+          resultEl.innerHTML = 'ثبت با موفقیت انجام شد. کد پیگیری: <strong>' + escapeHtml(data.tracking) + '</strong>' + '<br><a href="/result.html?code='+encodeURIComponent(data.tracking)+'">مشاهده نتیجه</a>';
         } else {
-          const err = await res.text();
-          document.getElementById('register-result').textContent = 'خطا در ثبت: '+err;
+          resultEl.textContent = 'خطا در ثبت: ' + (data.error || JSON.stringify(data));
         }
-      }catch(err){
-        document.getElementById('register-result').textContent = 'خطا در ارتباط با سرور.';
-      }
+      }catch(err){ resultEl.textContent='خطا در ارتباط با سرور.' }
     });
+
   </script>
 </body>
 </html>

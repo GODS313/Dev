@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>نتیجه — همکاره</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <main>
+    <h1>مشاهده نتیجه ثبت‌نام</h1>
+    <form id="codeForm">
+      <label for="code">کد پیگیری</label>
+      <input id="code" required>
+      <button type="submit">نمایش نتیجه</button>
+    </form>
+    <div id="result"></div>
+  </main>
+  <script>
+    document.getElementById('codeForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const code = document.getElementById('code').value.trim();
+      if(!code) return;
+      const resEl = document.getElementById('result'); resEl.textContent='در حال دریافت...';
+      try{
+        const r = await fetch('/api/result?code='+encodeURIComponent(code));
+        const j = await r.json();
+        if(r.ok && j.ok){ resEl.innerHTML = '<p>نام: '+j.record.name+'</p><p>استان: '+j.record.province+'</p><p>زمان ثبت: '+j.record.created_at+'</p>' } else { resEl.textContent = 'خطا: '+(j.error||'یافت نشد') }
+      }catch(err){ resEl.textContent='خطا در ارتباط' }
+    });
+  </script>
+</body>
+</html>
