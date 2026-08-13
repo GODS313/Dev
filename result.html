@@ -1,16 +1,19 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>نتیجه — همکاره</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نتیجه — همکاره</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>body{font-family:Vazirmatn,Arial;margin:1rem}main{max-width:720px;margin:0 auto}</style>
 </head>
 <body>
   <main>
     <h1>مشاهده نتیجه ثبت‌نام</h1>
+    <p>برای مشاهده نتیجه، کد پیگیری و چهار رقم آخر شماره موبایل را وارد کنید.</p>
     <form id="codeForm">
       <label for="code">کد پیگیری</label>
       <input id="code" required>
+      <label for="last4">چهار رقم آخر موبایل</label>
+      <input id="last4" required pattern="[0-9]{4}">
       <button type="submit">نمایش نتیجه</button>
     </form>
     <div id="result"></div>
@@ -19,10 +22,10 @@
     document.getElementById('codeForm').addEventListener('submit', async (e)=>{
       e.preventDefault();
       const code = document.getElementById('code').value.trim();
-      if(!code) return;
+      const last4 = document.getElementById('last4').value.trim();
       const resEl = document.getElementById('result'); resEl.textContent='در حال دریافت...';
       try{
-        const r = await fetch('/api/result?code='+encodeURIComponent(code));
+        const r = await fetch('/api/result?code='+encodeURIComponent(code)+'&last4='+encodeURIComponent(last4));
         const j = await r.json();
         if(r.ok && j.ok){ resEl.innerHTML = '<p>نام: '+j.record.name+'</p><p>استان: '+j.record.province+'</p><p>زمان ثبت: '+j.record.created_at+'</p>' } else { resEl.textContent = 'خطا: '+(j.error||'یافت نشد') }
       }catch(err){ resEl.textContent='خطا در ارتباط' }
