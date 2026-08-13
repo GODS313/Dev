@@ -5,61 +5,52 @@ Framework preset: None
 Build command: (خالی)
 Build output directory: `/`
 
-1) پیکربندی پروژه در Cloudflare Pages
-- در داشبورد Cloudflare → Pages → Create project یا انتخاب پروژه موجود.
-- Repository: GODS313/Dev
+## 1) پیکربندی Pages
+
+- Repository: `GODS313/Dev`
 - Production branch: `main`
 - Framework preset: None
-- Build command: (خالی)
+- Build command: خالی
 - Build output directory: `/`
 
-2) Environment variables (در بخش Settings > Environment variables قرار دهید)
-- CF_PAGES_BRANCH=main
-- CF_ACCOUNT_ID= (از داشبورد Cloudflare دریافت کنید)
-- D1 binding (در بخش "Functions > D1") نام binding را `DB` قرار دهید.
-- اگر از KV نیز استفاده کنید: نام binding را مطابق DEPLOYMENT قرار دهید.
+## 2) D1 و binding
 
-3) D1 — Migration و Binding
-- این پروژه شامل یک فایل migration SQL در `migrations/001_create_registrations.sql` که جدول `registrations` را ایجاد می‌کند.
-- مراحل برای ایجاد D1 و اعمال migration:
-  a) در Cloudflare dashboard → D1 → Create database → نام دلخواه.
-  b) ایجاد binding در پروژه Pages: Settings → Functions → D1 bindings → Add binding
-     - Name: `DB`
-     - Database: انتخاب دیتابیس ساخته‌شده
-  c) اعمال migration: از CLI wrangler یا از کنسول D1 در داشبورد استفاده کنید:
-     - با wrangler:
-       1. نصب wrangler (اگر ندارید): `npm install -g wrangler`
-       2. در ریشهٔ پروژه، فایل migration موجود است. برای اعمال migration از دستورهای D1/Cloudflare استفاده کنید.
-       3. مثال (با توجه به مستندات فعلی Cloudflare D1): `wrangler d1 migrations apply --project-name=<YOUR_PROJECT> --binding=DB`
-     - یا از UI D1: وارد بخش Migrations شوید و SQL موجود در `migrations/001_create_registrations.sql` را اجرا کنید.
+1. در Cloudflare Dashboard یک D1 database بسازید.
+2. در Pages > Settings > Functions > D1 bindings، دیتابیس را با نام binding دقیق `DB` متصل کنید.
+3. migration موجود در `migrations/001_create_registrations.sql` را روی دیتابیس production اجرا کنید:
 
-4) Files/Functions
-- Pages Functions در مسیر `functions/api/` قرار دارند:
-  - `functions/api/register.js` => POST /api/register
-  - `functions/api/result.js` => GET /api/result?code=...
-- Binding مورد نیاز در Functions: `DB` برای دسترسی به D1.
+```bash
+npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
+```
 
-5) Custom domains
-- افزودن دامنه `adlisho.online` در بخش Custom domains پروژهٔ Pages.
-- افزودن `www.adlisho.online` نیز.
-- تنظیم Redirect دائمی (301) از `www` به دامنهٔ اصلی:
-  - Pages => Custom domains => انتخاب دامنه `www.adlisho.online` => Redirect to adlisho.online
-  - یا از Cloudflare dashboard => Rules => Forwarding URL (301) from `https://www.adlisho.online/*` to `https://adlisho.online/$1`.
+به‌جای `<D1_DATABASE_NAME>` نام واقعی دیتابیس D1 را قرار دهید. پس از اجرا، وجود جدول `registrations` را در D1 Console بررسی کنید.
 
-6) HTTPS و تنظیمات امنیت
-- در Cloudflare → SSL/TLS: فعال‌سازی "Always Use HTTPS".
-- در Pages → Settings: اطمینان حاصل کنید که HTTPS فعال است.
+## 3) Functions و مسیرها
 
-7) Rollback
-- Cloudflare Pages → Deployments → انتخاب Deploy قبلی → Redeploy (یا Rollback) به Commit مورد نظر.
+- `functions/api/register.js` → `POST /api/register`
+- `functions/api/result.js` → `GET /api/result?code=...&last4=...`
+- `functions/download.js` → `GET /download`
+- مسیر قدیمی `/download.php` با `_redirects` به `/download` هدایت می‌شود.
 
-8) نکات عملیاتی و bindings
-- Binding name for D1 must be `DB` to match the code in `functions/api/*.js`.
-- Store any bot tokens or secrets in Pages environment variables (not in repo).
+متغیر اختیاری `APK_DOWNLOAD_URL` باید یک URL کامل HTTPS برای APK باشد. اگر تنظیم نشود، gateway از URL پیش‌فرض HTTPS داخل Function استفاده می‌کند. توکن و secret را فقط در Cloudflare environment variables قرار دهید.
 
-9) تست‌ها پس از استقرار
-- اجرای Build بدون خطا (در preset None و no build command، Pages باید فایل‌های استاتیک را مستقیم منتشر کند).
-- دسترسی به `https://adlisho.online` و بررسی صفحات: `index.html`, `privacy.html`, `terms.html`, `contact.html`.
-- درخواست POST به `https://adlisho.online/api/register` برای ثبت‌نام و دریافت JSON پاسخ.
-- بررسی دیتابیس D1 و جدول `registrations` برای سطرهای درج‌شده.
+## 4) دامنه و HTTPS
 
+- `adlisho.online` و در صورت نیاز `www.adlisho.online` را در Custom domains متصل کنید.
+- DNS دامنه باید به پروژه Pages متصل شود؛ رکورد قبلی VPS نباید هم‌زمان ترافیک production را نگه دارد.
+- در SSL/TLS، گزینه Always Use HTTPS را فعال کنید.
+- برای `www` یک redirect دائمی به دامنه اصلی تعریف کنید.
+
+## 5) تست پس از Deploy
+
+1. `GET /config.json` باید JSON معتبر و `apk_url` برابر `/download` برگرداند.
+2. `POST /api/register` با JSON معتبر باید `201` و کد پیگیری برگرداند.
+3. ثبت دوباره همان موبایل باید `200` و همان کد را برگرداند.
+4. `GET /api/result?code=<CODE>&last4=<LAST4>` باید نتیجه را برگرداند.
+5. `GET /download` باید پاسخ APK با `Content-Disposition: attachment; filename="hamkare.apk"` بدهد.
+6. `GET /download.php` باید به `/download` redirect شود.
+7. در D1 Console درج سطر در جدول `registrations` را تأیید کنید.
+
+## 6) Rollback
+
+در Pages > Deployments یک deployment سالم قبلی را انتخاب و Rollback/Redeploy کنید.
