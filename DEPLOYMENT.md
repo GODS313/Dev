@@ -43,7 +43,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 ## 5) تست پس از Deploy
 
-1. `GET /config.json` باید JSON معتبر و `apk_url` برابر `/download` برگرداند.
+1. `GET /config.json` باید JSON معتبر و یک `apk_url` کامل با پروتکل HTTPS برگرداند.
 2. `POST /api/register` با JSON معتبر باید `201` و کد پیگیری برگرداند.
 3. ثبت دوباره همان موبایل باید `200` و همان کد را برگرداند.
 4. `GET /api/result?code=<CODE>&last4=<LAST4>` باید نتیجه را برگرداند.
