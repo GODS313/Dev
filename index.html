@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>همکاره — فرصت‌های شغلی سراسر ایران</title>
+  <meta name="description" content="همکاره — پلتفرمی برای یافتن فرصت‌های شغلی در سراسر ایران">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a4661">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+  <style>
+    :root{--accent:#0a4661}
+    html,body{height:100%;margin:0;font-family: Vazirmatn, Tahoma, Arial, sans-serif;background:#f7fafc;color:#111}
+    .container{max-width:1024px;margin:0 auto;padding:1rem}
+    header{display:flex;align-items:center;justify-content:space-between;padding:1rem 0}
+    nav a{margin-left:1rem;color:var(--accent);text-decoration:none}
+    .hero{background:#fff;border-radius:8px;padding:1.5rem;margin-bottom:1rem}
+    .jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}
+    .job{background:#fff;padding:1rem;border-radius:6px}
+    .mobile-menu{display:none}
+    @media(max-width:600px){nav{display:none}.mobile-menu{display:block}}
+    form input,form select,form button{display:block;width:100%;padding:.6rem;margin:.4rem 0}
+    footer{padding:1rem 0;color:#666}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div><strong>همکاره</strong></div>
+      <nav>
+        <a href="#jobs">آگهی‌ها</a>
+        <a href="#register">ثبت‌نام</a>
+        <a href="#test">آزمون</a>
+        <a href="#download">دانلود اپلیکیشن</a>
+        <a href="tel:09011902031">تماس</a>
+        <a href="https://t.me/Pasokh313e_bot" target="_blank" rel="noopener">ربات</a>
+      </nav>
+      <div class="mobile-menu">منو</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>پلتفرم فرصت‌های شغلی — سراسر ایران</h1>
+        <p>استخدام ساده، قابل‌اعتماد و سریع. استان خود را انتخاب کنید و فرصت‌های مناسب را بیابید.</p>
+      </section>
+
+      <section id="jobs">
+        <h2>جستجوی فرصت‌ها</h2>
+        <label for="province">استان</label>
+        <select id="province">
+          <option value="">انتخاب استان</option>
+          <option>آذربایجان شرقی</option>
+          <option>آذربایجان غربی</option>
+          <option>اردبیل</option>
+          <option>اصفهان</option>
+          <!-- کوتاه‌شده: در نسخه نهایی همه 31 استان اضافه شود -->
+        </select>
+        <div class="jobs" id="job-list">
+          <div class="job"><h3>مثال: همکار اداری</h3><p>تهران — پاره‌وقت</p></div>
+        </div>
+      </section>
+
+      <section id="register">
+        <h2>فرم ثبت‌نام</h2>
+        <form id="register-form" novalidate>
+          <label for="name">نام و نام خانوادگی</label>
+          <input id="name" name="name" required minlength="3">
+          <label for="phone">شماره تماس</label>
+          <input id="phone" name="phone" type="tel" pattern="09[0-9]{9}" required placeholder="09xxxxxxxxx">
+          <label for="province_select">استان</label>
+          <select id="province_select" name="province" required>
+            <option value="">انتخاب</option>
+            <option value="tehran">تهران</option>
+          </select>
+          <button type="submit">ارسال</button>
+        </form>
+        <div id="register-result" aria-live="polite"></div>
+      </section>
+
+      <section id="test">
+        <h2>آزمون</h2>
+        <p>در اینجا نمونه‌ای از صفحهٔ آزمون قرار می‌گیرد. آزمون‌های واقعی باید سمت سرور بررسی ��وند.</p>
+      </section>
+
+      <section id="download">
+        <h2>دانلود اپلیکیشن</h2>
+        <p>لینک دانلود APK و QR کد پایین دقیقاً به یک URL متصل هستند.</p>
+        <a id="download-button" class="btn" href="#">دانلود اپلیکیشن (APK)</a>
+        <div>
+          <img id="qr" alt="QR کد برای دانلود" src="" width="150" height="150">
+        </div>
+        <p id="apk-info" style="color:#c33"></p>
+      </section>
+
+    </main>
+
+    <footer>
+      <p>© همکاره — تمامی حقوق محفوظ است.</p>
+      <p><a href="/privacy.html">حریم خصوصی</a> | <a href="/terms.html">قوانین استفاده</a> | <a href="/contact.html">تماس با ما</a></p>
+    </footer>
+  </div>
+
+  <script>
+    // بارگذاری تنظیمات مرکزی
+    fetch('/config.json').then(r=>r.json()).then(cfg=>{
+      const apk = cfg.apk_url || '#';
+      const btn = document.getElementById('download-button');
+      btn.setAttribute('href', apk);
+      btn.setAttribute('rel','noopener');
+      btn.setAttribute('target','_blank');
+      // qr image via public QR service; ensure it is https and respects the exact URL
+      document.getElementById('qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(apk);
+      document.getElementById('qr').parentNode.querySelector('img').alt = 'QR برای '+apk;
+    }).catch(e=>console.error('config load failed',e));
+
+    // فرم ثبت‌نام — ارسال به Cloudflare Pages Function یا mock
+    document.getElementById('register-form').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      if(!name || !/^09\d{9}$/.test(phone)){
+        document.getElementById('register-result').textContent = 'لطفاً نام و شمارهٔ معتبر وارد کنید.';
+        return;
+      }
+      // ارسال به endpoint امن (باید در DEPLOYMENT.md مشخص شود)
+      const endpoint = '/api/register';
+      try{
+        const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone})});
+        if(res.ok){
+          const data = await res.json();
+          document.getElementById('register-result').textContent = 'ثبت با موفقیت انجام شد. کد پیگیری: '+(data.tracking||'—');
+        } else {
+          const err = await res.text();
+          document.getElementById('register-result').textContent = 'خطا در ثبت: '+err;
+        }
+      }catch(err){
+        document.getElementById('register-result').textContent = 'خطا در ارتباط با سرور.';
+      }
+    });
+  </script>
+</body>
+</html>

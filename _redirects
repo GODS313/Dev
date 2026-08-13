@@ -1,0 +1,25 @@
+/*    
+  Redirect all requests to index.html for SPA routing
+  Cloudflare Pages supports Netlify _redirects format for simple SPA routing.
+*/
+/*  /index.html  200
+*/
+/*	/index.html	200
+*/
+
+/* Fallback for everything to index.html */
+/* This file uses the Netlify _redirects syntax accepted by Cloudflare Pages */
+
+/*
+Format:
+  /*    /index.html   200
+*/
+/*
+Make sure the cloudflare pages settings honor this file.
+*/
+/* This is a minimal placeholder; Cloudflare Pages supports _redirects in the root. */
+/* The actual content below: */
+/*
+/  /index.html  200
+*/
+/    /index.html   200
