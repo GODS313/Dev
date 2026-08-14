@@ -10,7 +10,7 @@ mkdir -p "$APP"
 
 read -rsp 'توکن تلگرام @Pasokh313e_bot: ' TG_TOKEN; echo
 read -rp 'آیدی عددی گروه گزارش تلگرام (معمولاً با -100): ' TG_LOG
-read -rsp 'توکن بله @Shahvvanibot: ' BALE_TOKEN; echo
+read -rsp 'توکن بله @Hamkarebot: ' BALE_TOKEN; echo
 read -rp 'آیدی عددی گروه گزارش بله: ' BALE_LOG
 
 [[ "$TG_TOKEN" == *:* && "$BALE_TOKEN" == *:* ]] || { echo 'فرمت توکن صحیح نیست.'; exit 1; }
@@ -161,6 +161,6 @@ systemctl is-active --quiet hamkare-telegram
 systemctl is-active --quiet hamkare-bale
 echo '✅ هر دو بات همکاره فعال شدند.'
 echo 'تلگرام: https://t.me/Pasokh313e_bot'
-echo 'بله: https://ble.ir/Shahvvanibot'
+echo 'بله: https://ble.ir/Hamkarebot'
 echo 'سایت: https://adlisho.online'
 echo 'تست: در هر دو بات /start بفرستید.'
