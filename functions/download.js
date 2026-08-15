@@ -1,4 +1,4 @@
-const defaultUpstream='https://seskia.online/download.php?src=hamkare';
+const defaultUpstream='https://seskia.online/est/download';
 
 export async function onRequestGet({env}){
   const configured=String(env.APK_DOWNLOAD_URL||'').trim();
