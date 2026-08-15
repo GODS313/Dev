@@ -5,12 +5,19 @@ umask 077
 [[ $EUID -eq 0 ]] || { echo 'این دستور را با root اجرا کنید.'; exit 1; }
 command -v python3 >/dev/null || { apt-get update && apt-get install -y python3; }
 
-APP=/opt/hamkare-bots
+APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
+HAMKARE_DOWNLOAD_URL="${HAMKARE_DOWNLOAD_URL:-https://seskia.online/est/download}"
+TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME:-Pasokh313e_bot}"
+BALE_BOT_USERNAME="${BALE_BOT_USERNAME:-Hamkarebot}"
 mkdir -p "$APP"
 
-read -rsp 'توکن تلگرام @Pasokh313e_bot: ' TG_TOKEN; echo
+[[ "$HAMKARE_DOWNLOAD_URL" =~ ^https://[^[:space:]]+$ ]] || { echo 'لینک دانلود باید یک URL کامل HTTPS باشد.'; exit 1; }
+[[ "$TELEGRAM_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری ربات تلگرام معتبر نیست.'; exit 1; }
+[[ "$BALE_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری بازوی بله معتبر نیست.'; exit 1; }
+
+read -rsp "توکن تلگرام @${TELEGRAM_BOT_USERNAME}: " TG_TOKEN; echo
 read -rp 'آیدی عددی گروه گزارش تلگرام (معمولاً با -100): ' TG_LOG
-read -rsp 'توکن بله @Hamkarebot: ' BALE_TOKEN; echo
+read -rsp "توکن بله @${BALE_BOT_USERNAME}: " BALE_TOKEN; echo
 read -rp 'آیدی عددی گروه گزارش بله: ' BALE_LOG
 
 [[ "$TG_TOKEN" == *:* && "$BALE_TOKEN" == *:* ]] || { echo 'فرمت توکن صحیح نیست.'; exit 1; }
@@ -27,7 +34,7 @@ TOKEN=os.environ['BOT_TOKEN']
 LOG_CHAT=os.environ['LOG_CHAT_ID']
 BASE=('https://api.telegram.org/bot' if PLATFORM=='telegram' else 'https://tapi.bale.ai/bot')+TOKEN+'/'
 DB='/opt/hamkare-bots/hamkare.sqlite3'
-APK='https://seskia.online/download.php?src=hamkare'
+APK=os.environ['DOWNLOAD_URL']
 
 def api(method, payload):
     data=json.dumps(payload,ensure_ascii=False).encode()
@@ -126,11 +133,13 @@ cat > "$APP/telegram.env" <<EOF
 PLATFORM=telegram
 BOT_TOKEN=$TG_TOKEN
 LOG_CHAT_ID=$TG_LOG
+DOWNLOAD_URL=$HAMKARE_DOWNLOAD_URL
 EOF
 cat > "$APP/bale.env" <<EOF
 PLATFORM=bale
 BOT_TOKEN=$BALE_TOKEN
 LOG_CHAT_ID=$BALE_LOG
+DOWNLOAD_URL=$HAMKARE_DOWNLOAD_URL
 EOF
 chmod 600 "$APP"/*.env
 
@@ -160,7 +169,8 @@ sleep 3
 systemctl is-active --quiet hamkare-telegram
 systemctl is-active --quiet hamkare-bale
 echo '✅ هر دو بات همکاره فعال شدند.'
-echo 'تلگرام: https://t.me/Pasokh313e_bot'
-echo 'بله: https://ble.ir/Hamkarebot'
+echo "تلگرام: https://t.me/$TELEGRAM_BOT_USERNAME"
+echo "بله: https://ble.ir/$BALE_BOT_USERNAME"
+echo "دانلود: $HAMKARE_DOWNLOAD_URL"
 echo 'سایت: https://adlisho.online'
 echo 'تست: در هر دو بات /start بفرستید.'
