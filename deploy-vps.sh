@@ -19,7 +19,9 @@ mkdir -p "$BACKUP_DIR"
 cp -a "$WEB_ROOT/." "$BACKUP_DIR/"
 
 install -m 0644 "$TMP_DIR/repo/index.html" "$WEB_ROOT/index.html"
-install -m 0644 "$TMP_DIR/repo/download.php" "$WEB_ROOT/download.php"
+if [[ -f "$TMP_DIR/repo/download.php" ]]; then
+  install -m 0644 "$TMP_DIR/repo/download.php" "$WEB_ROOT/download.php"
+fi
 install -m 0644 "$TMP_DIR/repo/result.html" "$WEB_ROOT/result.html"
 install -m 0644 "$TMP_DIR/repo/config.json" "$WEB_ROOT/config.json"
 install -m 0644 "$TMP_DIR/repo/favicon.svg" "$WEB_ROOT/favicon.svg"
