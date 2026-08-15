@@ -32,7 +32,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 - `functions/download.js` → `GET /download`
 - مسیر قدیمی `/download.php` با `_redirects` به `/download` هدایت می‌شود.
 
-متغیر اختیاری `APK_DOWNLOAD_URL` باید یک URL کامل HTTPS برای APK باشد. اگر تنظیم نشود، gateway از URL پیش‌فرض HTTPS داخل Function استفاده می‌کند. توکن و secret را فقط در Cloudflare environment variables قرار دهید.
+متغیر اختیاری `APK_DOWNLOAD_URL` باید یک URL کامل HTTPS برای APK باشد. مقدار production فعلی `https://seskia.online/est/download` است و در صورت تنظیم‌نشدن متغیر، gateway همین مقصد را استفاده می‌کند. توکن و secret را فقط در Cloudflare environment variables قرار دهید.
 
 ## 4) دامنه و HTTPS
 
