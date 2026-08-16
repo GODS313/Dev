@@ -1,0 +1,31 @@
+name: Release checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax
+        run: |
+          php -l seskia-admin/admin.php
+          php -l seskia-admin/download.php
+          php -l seskia-admin/panel-lib.php
+      - name: Shell syntax
+        run: bash -n deploy-vps.sh deploy-hamkare-bots.sh install-seskia-admin-panel.sh
+      - name: Python tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Node tests
+        run: node --test tests/test_functions.mjs
+      - name: JSON syntax
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('config.json'))"
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json'))"

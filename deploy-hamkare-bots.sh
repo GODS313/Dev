@@ -3,9 +3,9 @@ set -Eeuo pipefail
 umask 077
 
 [[ $EUID -eq 0 ]] || { echo 'این دستور را با root اجرا کنید.'; exit 1; }
-if ! command -v python3 >/dev/null || ! command -v apksigner >/dev/null; then
+if ! command -v python3 >/dev/null; then
   apt-get update
-  apt-get install -y python3 apksigner
+  apt-get install -y python3
 fi
 command -v realpath >/dev/null || { echo 'realpath در دسترس نیست.' >&2; exit 1; }
 
@@ -22,7 +22,6 @@ PRIVACY_URL="${PRIVACY_URL:-https://adlisho.online/privacy.html}"
 TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"
 TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME:-Pasokh313e_bot}"
 BALE_BOT_USERNAME="${BALE_BOT_USERNAME:-Hamkarebot}"
-APK_DEPLOY_PATH="${APK_DEPLOY_PATH:-/var/www/seskia/app.apk}"
 MAX_APK_BYTES="${MAX_APK_BYTES:-20971520}"
 
 prompt_secret() {
@@ -59,18 +58,6 @@ prompt_value BALE_ADMIN_IDS 'آیدی عددی مدیران بله (با کام�
 [[ "$APP" =~ ^/(opt|srv)/[A-Za-z0-9._/-]+$ ]] || { echo 'HAMKARE_APP_DIR باید مسیر امنی زیر /opt یا /srv باشد.' >&2; exit 1; }
 APP="$(realpath -m -- "$APP")"
 [[ "$APP" == /opt/* || "$APP" == /srv/* ]] || { echo 'مسیر نهایی HAMKARE_APP_DIR باید زیر /opt یا /srv باشد.' >&2; exit 1; }
-[[ "$APK_DEPLOY_PATH" == /* && "$APK_DEPLOY_PATH" != *[[:space:]]* ]] || { echo 'APK_DEPLOY_PATH باید مسیر مطلق و بدون فاصله باشد.' >&2; exit 1; }
-APK_DEPLOY_PATH="$(realpath -m -- "$APK_DEPLOY_PATH")"
-[[ "$APK_DEPLOY_PATH" == *.apk ]] || { echo 'APK_DEPLOY_PATH باید به فایل .apk ختم شود.' >&2; exit 1; }
-[[ "$APK_DEPLOY_PATH" == /var/www/* || "$APK_DEPLOY_PATH" == /srv/* ]] || { echo 'مسیر نهایی APK باید زیر /var/www یا /srv باشد.' >&2; exit 1; }
-[[ -d "$(dirname "$APK_DEPLOY_PATH")" ]] || { echo "پوشه مقصد APK وجود ندارد: $(dirname "$APK_DEPLOY_PATH")" >&2; exit 1; }
-[[ ! -L "$APK_DEPLOY_PATH" ]] || { echo 'مسیر APK نباید symbolic link باشد.' >&2; exit 1; }
-APK_STAGE_DIR="${APK_STAGE_DIR:-$(dirname "$APK_DEPLOY_PATH")/.hamkare-apk-staging}"
-[[ "$APK_STAGE_DIR" == /* && "$APK_STAGE_DIR" != *[[:space:]]* ]] || { echo 'APK_STAGE_DIR باید مسیر مطلق و بدون فاصله باشد.' >&2; exit 1; }
-[[ ! -L "$APK_STAGE_DIR" ]] || { echo 'مسیر staging نباید symbolic link باشد.' >&2; exit 1; }
-APK_STAGE_DIR="$(realpath -m -- "$APK_STAGE_DIR")"
-[[ "$(dirname "$APK_STAGE_DIR")" == "$(dirname "$APK_DEPLOY_PATH")" && "$(basename "$APK_STAGE_DIR")" == .* ]] || { echo 'staging باید پوشه‌ای مخفی کنار APK باشد.' >&2; exit 1; }
-install -d -m 0700 "$APK_STAGE_DIR"
 
 for url in "$SITE_URL" "$DOWNLOAD_URL" "$SUPPORT_URL" "$PRIVACY_URL" "$TRACKING_URL"; do
   [[ "$url" =~ ^https://[^[:space:]]+$ ]] || { echo "لینک HTTPS معتبر نیست: $url" >&2; exit 1; }
@@ -98,11 +85,11 @@ SUPPORT_URL=$SUPPORT_URL
 PRIVACY_URL=$PRIVACY_URL
 TRACKING_URL=$TRACKING_URL
 DATABASE_PATH=$APP/hamkare.sqlite3
-APK_UPLOAD_ENABLED=true
-APK_DEPLOY_PATH=$APK_DEPLOY_PATH
-APK_STAGE_DIR=$APK_STAGE_DIR
+APK_UPLOAD_ENABLED=false
+APK_DEPLOY_PATH=
+APK_STAGE_DIR=
 MAX_APK_BYTES=$MAX_APK_BYTES
-PUBLIC_VERIFY_ENABLED=true
+PUBLIC_VERIFY_ENABLED=false
 EOF
 
 cat > "$APP/bale.env" <<EOF
@@ -127,9 +114,6 @@ chmod 600 "$APP"/*.env
 
 for platform in telegram bale; do
   read_write_paths="$APP"
-  if [[ "$platform" == telegram ]]; then
-    read_write_paths="$read_write_paths $(dirname "$APK_DEPLOY_PATH")"
-  fi
   cat > "/etc/systemd/system/hamkare-$platform.service" <<EOF
 [Unit]
 Description=Hamkare $platform recruitment bot
@@ -182,7 +166,7 @@ echo '✅ هر دو بات وایت‌لیبل همکاره فعال شدند.'
 echo "تلگرام: https://t.me/$TELEGRAM_BOT_USERNAME"
 echo "بله: https://ble.ir/$BALE_BOT_USERNAME"
 echo "دانلود ثابت: $DOWNLOAD_URL"
-echo "تعویض فایل APK: فقط مدیران @${TELEGRAM_BOT_USERNAME}"
-echo "مسیر APK: $APK_DEPLOY_PATH"
+echo 'تعویض فایل APK: فقط از پنل امن https://seskia.online/admin.php یا بات اختصاصی آپلود Seskia'
+echo 'بات استخدامی تلگرام و بات بله هیچ دسترسی مستقیم به فایل APK ندارند.'
 [[ -z "$BACKUP" ]] || echo "بکاپ نسخه قبلی: $BACKUP"
 echo 'تست: /start را از یک حساب مدیر و یک حساب کاربر عادی در هر دو بات اجرا کنید.'
