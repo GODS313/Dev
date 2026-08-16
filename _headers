@@ -19,3 +19,10 @@
 
 /manifest.json
   Cache-Control: public, max-age=3600
+
+/admin.html
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+
+/api/admin/*
+  Cache-Control: no-store
