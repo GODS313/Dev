@@ -1,4 +1,10 @@
 https://www.adlisho.online/* https://adlisho.online/:splat 301
+/app /result.html 200
+/app/* /result.html 200
+/register /index.html 200
+/register/* /index.html 200
+/exam /index.html 200
+/exam/* /index.html 200
 /download.php /download 302
 /result /result.html 200
 /privacy /privacy.html 200

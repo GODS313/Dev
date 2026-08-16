@@ -59,6 +59,16 @@ class ReleaseStaticTests(unittest.TestCase):
         self.assertEqual(primary, legacy)
         self.assertTrue(primary.startswith(b"\x89PNG\r\n\x1a\n"))
 
+    def test_stable_webview_routes_and_age_gate_exist(self):
+        redirects = (ROOT / "_redirects").read_text(encoding="utf-8")
+        index = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn("/app/* /result.html 200", redirects)
+        self.assertIn("/register/* /index.html 200", redirects)
+        self.assertIn("/exam/* /index.html 200", redirects)
+        self.assertIn("بله، بالای ۲۵ سال هستم", index)
+        self.assertIn("https://t.me/Pasokh313e_bot", index)
+        self.assertIn("https://ble.ir/Hamkarebot", index)
+
 
 if __name__ == "__main__":
     unittest.main()
