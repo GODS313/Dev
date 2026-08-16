@@ -1,4 +1,4 @@
-const DOWNLOAD_URL = "http://143.14.59.50/seskia.apk";
+const DOWNLOAD_URL = "https://seskia.online/est/download";
 const shell = document.querySelector(".site-shell");
 const themeButtons = [...document.querySelectorAll("[data-select-theme]")];
 const preferredTheme = new URLSearchParams(window.location.search).get("theme");
