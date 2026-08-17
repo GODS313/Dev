@@ -14,6 +14,8 @@ RELEASE_CHECKS = (ROOT / '.github' / 'workflows' / 'release-checks.yml').read_te
 
 class ApkReleaseBridgeStaticTests(unittest.TestCase):
     def test_workflow_is_manual_serialized_and_least_privilege(self):
+        self.assertIn('push:', WORKFLOW)
+        self.assertIn('uploads/hamkare.apk', WORKFLOW)
         self.assertIn('workflow_dispatch:', WORKFLOW)
         self.assertIn('source_url:', WORKFLOW)
         self.assertIn('sha256:', WORKFLOW)
@@ -38,6 +40,8 @@ class ApkReleaseBridgeStaticTests(unittest.TestCase):
             'cmp -s "$WORK_DIR/current-signers.txt" "$WORK_DIR/candidate-signers.txt"',
         ):
             self.assertIn(guard, PUBLISHER)
+        self.assertIn('$GITHUB_WORKSPACE/uploads/hamkare.apk', PUBLISHER)
+        self.assertIn('SOURCE_MODE=local', PUBLISHER)
         self.assertLess(PUBLISHER.index('actual_sha256='), PUBLISHER.index('gh release create'))
         self.assertLess(PUBLISHER.index('cmp -s '), PUBLISHER.index('gh release create'))
 

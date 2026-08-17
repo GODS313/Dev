@@ -1,6 +1,10 @@
 name: Publish Hamkare APK
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - uploads/hamkare.apk
   workflow_dispatch:
     inputs:
       source_url:
@@ -32,6 +36,14 @@ jobs:
       - name: Validate and publish verified APK
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_URL: ${{ inputs.source_url }}
-          EXPECTED_SHA256: ${{ inputs.sha256 }}
-        run: bash scripts/publish-hamkare-apk.sh "$SOURCE_URL" "$EXPECTED_SHA256"
+          DISPATCH_SOURCE_URL: ${{ inputs.source_url }}
+          DISPATCH_EXPECTED_SHA256: ${{ inputs.sha256 }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            source="$GITHUB_WORKSPACE/uploads/hamkare.apk"
+            expected="$(sha256sum "$source" | awk '{print $1}')"
+          else
+            source="$DISPATCH_SOURCE_URL"
+            expected="$DISPATCH_EXPECTED_SHA256"
+          fi
+          bash scripts/publish-hamkare-apk.sh "$source" "$expected"

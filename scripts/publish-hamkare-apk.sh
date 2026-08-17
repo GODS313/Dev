@@ -18,6 +18,11 @@ for command_name in apksigner curl gh python3 sha256sum stat timeout; do
   command -v "$command_name" >/dev/null || { echo "Missing command: $command_name" >&2; exit 1; }
 done
 
+SOURCE_MODE=url
+if [[ -n "${GITHUB_WORKSPACE:-}" && "$SOURCE_URL" == "$GITHUB_WORKSPACE/uploads/hamkare.apk" ]]; then
+  [[ -f "$SOURCE_URL" && ! -L "$SOURCE_URL" ]] || { echo 'Committed APK source is not a regular file.' >&2; exit 1; }
+  SOURCE_MODE=local
+else
 python3 - "$SOURCE_URL" "$EXPECTED_SHA256" <<'PY'
 import sys
 from urllib.parse import parse_qs, urlsplit
@@ -39,6 +44,7 @@ if (
 ):
     raise SystemExit("Source URL is outside the approved Seskia release endpoint.")
 PY
+fi
 
 WORK_DIR="$(mktemp -d)"
 RELEASE_TAG=""
@@ -58,9 +64,13 @@ CANDIDATE="$WORK_DIR/candidate.apk"
 CURRENT="$WORK_DIR/current.apk"
 PUBLIC_COPY="$WORK_DIR/public.apk"
 
-curl --fail --silent --show-error \
-  --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 300 \
-  --output "$CANDIDATE" "$SOURCE_URL"
+if [[ "$SOURCE_MODE" == local ]]; then
+  cp -- "$SOURCE_URL" "$CANDIDATE"
+else
+  curl --fail --silent --show-error \
+    --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 300 \
+    --output "$CANDIDATE" "$SOURCE_URL"
+fi
 
 candidate_size="$(stat -c %s "$CANDIDATE")"
 [[ "$candidate_size" =~ ^[0-9]+$ && "$candidate_size" -ge 1024 && "$candidate_size" -le $MAX_APK_BYTES ]] || {
