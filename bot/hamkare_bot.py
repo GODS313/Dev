@@ -60,6 +60,15 @@ def valid_national_id(value: object) -> bool:
     return int(code[-1]) == check
 
 
+def normalize_iranian_mobile(value: object) -> str:
+    phone = re.sub(r"[\s()-]+", "", normalize(value))
+    if re.fullmatch(r"\+989\d{9}", phone):
+        phone = "0" + phone[3:]
+    elif re.fullmatch(r"00989\d{9}", phone):
+        phone = "0" + phone[4:]
+    return phone if re.fullmatch(r"09\d{9}", phone) else ""
+
+
 def normalize_person_name(value: object, max_length: int) -> str:
     """Return a single-line human name or an empty string when it is unsafe."""
     name = re.sub(r" +", " ", normalize(value))
@@ -171,6 +180,7 @@ def verify_apk_signature(path: Path) -> bool:
 
 class SafeGitHubRedirectHandler(urllib.request.HTTPRedirectHandler):
     allowed_hosts = {
+        "seskia.online",
         "github.com",
         "github-releases.githubusercontent.com",
         "objects.githubusercontent.com",
@@ -393,15 +403,20 @@ class Config:
         apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
         release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
         if enabled:
-            if urls["DOWNLOAD_URL"] != "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk":
-                raise ValueError("DOWNLOAD_URL must be the canonical GitHub release")
-            if not re.fullmatch(r"\S{40,255}", github_dispatch_token):
-                raise ValueError("GITHUB_DISPATCH_TOKEN is required for APK publication")
-            if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
-                raise ValueError("GitHub release workflow configuration is invalid")
-            release_source_url(apk_source_url, "0" * 64)
+            github_url = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+            local_url = "https://seskia.online/download.php?src=hamkare"
+            if github_dispatch_token:
+                if urls["DOWNLOAD_URL"] != github_url:
+                    raise ValueError("DOWNLOAD_URL must be the canonical GitHub release")
+                if not re.fullmatch(r"\S{40,255}", github_dispatch_token):
+                    raise ValueError("GITHUB_DISPATCH_TOKEN format is invalid")
+                if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
+                    raise ValueError("GitHub release workflow configuration is invalid")
+                release_source_url(apk_source_url, "0" * 64)
+            elif platform != "bale" or urls["DOWNLOAD_URL"] != local_url:
+                raise ValueError("local APK publication is allowed only for Bale on the canonical Seskia URL")
             if not public_verify_enabled:
-                raise ValueError("PUBLIC_VERIFY_ENABLED must stay true for Telegram APK publication")
+                raise ValueError("PUBLIC_VERIFY_ENABLED must stay true for APK publication")
             if not 60 <= release_wait_seconds <= 600:
                 raise ValueError("RELEASE_WAIT_SECONDS must be between 60 and 600")
         return cls(
@@ -645,7 +660,7 @@ class Bot:
             self.send(chat_id, "ثبت‌نام موقتاً متوقف است. لطفاً کمی بعد دوباره تلاش کنید.", self.user_menu(user_id))
             return
         self.session(user_id, "first")
-        self.send(chat_id, "مرحله ۱ از ۳\nلطفاً نام خود را وارد کنید:", self.flow_keyboard())
+        self.send(chat_id, "لطفاً نام خود را وارد کنید:", self.flow_keyboard())
 
     def download(self, chat_id: object, user_id: str) -> None:
         if not self.is_registered(user_id) and not self.is_admin(user_id):
@@ -655,11 +670,57 @@ class Bot:
                 [[{"text": "📝 شروع ثبت‌نام", "callback_data": "register"}], *self.flow_keyboard()],
             )
             return
+        if self.config.platform == "bale":
+            self.send(
+                chat_id,
+                "✅ دفترچه آماده دانلود است.",
+                [[{"text": "📥 دانلود دفترچه", "url": self.config.download_url}]],
+            )
+        else:
+            self.send(
+                chat_id,
+                "نسخه رسمی اپلیکیشن از دکمه زیر در دسترس است.",
+                [[{"text": "📥 دانلود امن اپلیکیشن", "url": self.config.download_url}],
+                 [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
+            )
+
+    def complete_bale_registration(
+        self, chat_id: object, user_id: str, actor: dict, first: str, last: str, phone: str
+    ) -> None:
+        digest = hashlib.sha256(phone.encode()).hexdigest()
+        try:
+            self.connection.execute(
+                "INSERT INTO registrations(platform,user_id,national_hash) VALUES(?,?,?)",
+                ("bale", user_id, digest),
+            )
+            self.connection.commit()
+        except sqlite3.IntegrityError:
+            self.clear_sessions(user_id)
+            self.download(chat_id, user_id)
+            return
+        username = actor.get("username")
+        username_text = "@" + username if username else "ندارد"
+        log = (
+            f"📌 ثبت جدید {self.config.brand_name}\nبستر: بله\n"
+            f"نام: {first}\nنام خانوادگی: {last}\nشماره تلفن: {phone}\n"
+            f"شناسه کاربر: {user_id}\nنام کاربری: {username_text}"
+        )
+        try:
+            self.send(self.config.log_chat_id, log)
+        except Exception:
+            self.connection.execute(
+                "DELETE FROM registrations WHERE platform=? AND user_id=?",
+                ("bale", user_id),
+            )
+            self.connection.commit()
+            self.send(chat_id, "ثبت انجام نشد؛ لطفاً دوباره تلاش کنید.", self.flow_keyboard())
+            return
+        self.clear_sessions(user_id)
+        self.audit(user_id, "bale_registration_completed")
         self.send(
             chat_id,
-            "نسخه رسمی اپلیکیشن از دکمه زیر در دسترس است.",
-            [[{"text": "📥 دانلود امن اپلیکیشن", "url": self.config.download_url}],
-             [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
+            "✅ مشخصات شما ثبت شد.",
+            [[{"text": "📥 دانلود دفترچه", "url": self.config.download_url}]],
         )
 
     def show_admin_panel(self, chat_id: object, user_id: str) -> None:
@@ -871,7 +932,14 @@ class Bot:
         )
 
     def handle_apk_upload(self, message: dict, user_id: str, chat_id: object) -> bool:
-        if self.admin_state(user_id) != "awaiting_apk":
+        document = message.get("document") or {}
+        file_name = str(document.get("file_name", ""))
+        direct_bale_upload = (
+            self.config.platform == "bale"
+            and self.is_admin(user_id)
+            and file_name.lower().endswith(".apk")
+        )
+        if self.admin_state(user_id) != "awaiting_apk" and not direct_bale_upload:
             return False
         if not can_upload_apk(
             self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
@@ -879,8 +947,6 @@ class Bot:
             self.clear_sessions(user_id)
             self.audit(user_id, "denied_apk_upload")
             return True
-        document = message.get("document") or {}
-        file_name = str(document.get("file_name", ""))
         file_id = str(document.get("file_id", ""))
         mime_type = str(document.get("mime_type", "")).lower()
         try:
@@ -909,8 +975,13 @@ class Bot:
             file_path = str(file_info.get("file_path", ""))
             if not file_path or ".." in file_path:
                 raise ValueError("مسیر فایل دریافتی نامعتبر است.")
+            file_host = (
+                "https://api.telegram.org/file/bot"
+                if self.config.platform == "telegram"
+                else "https://tapi.bale.ai/file/bot"
+            )
             file_url = (
-                f"https://api.telegram.org/file/bot{self.config.token}/"
+                f"{file_host}{self.config.token}/"
                 + urllib.parse.quote(file_path, safe="/")
             )
             with tempfile.NamedTemporaryFile(
@@ -1212,7 +1283,14 @@ class Bot:
         command = text.split(maxsplit=1)[0].split("@", 1)[0].lower() if text else ""
         if command in {"/start", "/menu"}:
             self.clear_sessions(user_id)
-            self.show_menu(chat_id, user_id)
+            if self.config.platform == "bale":
+                self.begin_registration(chat_id, user_id)
+            else:
+                self.show_menu(chat_id, user_id)
+            return
+        if command == "/admin" and self.is_admin(user_id):
+            self.clear_sessions(user_id)
+            self.show_admin_panel(chat_id, user_id)
             return
         if command in {"/stop", "/cancel"}:
             self.clear_sessions(user_id)
@@ -1223,7 +1301,10 @@ class Bot:
             return
         row = self.session_row(user_id)
         if row is None:
-            self.show_menu(chat_id, user_id)
+            if self.config.platform == "bale":
+                self.begin_registration(chat_id, user_id)
+            else:
+                self.show_menu(chat_id, user_id)
             return
         state, first, last, _national_id = row
         if state == "first":
@@ -1232,14 +1313,26 @@ class Bot:
                 self.send(chat_id, "نام معتبر وارد کنید.", self.flow_keyboard())
                 return
             self.session(user_id, "last", name)
-            self.send(chat_id, "مرحله ۲ از ۳\nنام خانوادگی خود را وارد کنید:", self.flow_keyboard())
+            self.send(chat_id, "نام خانوادگی خود را وارد کنید:", self.flow_keyboard())
         elif state == "last":
             family_name = normalize_person_name(text, 70)
             if not family_name:
                 self.send(chat_id, "نام خانوادگی معتبر وارد کنید.", self.flow_keyboard())
                 return
-            self.session(user_id, "nid", first, family_name)
-            self.send(chat_id, "مرحله ۳ از ۳\nکد ملی ۱۰ رقمی خود را وارد کنید:", self.flow_keyboard())
+            if self.config.platform == "bale":
+                self.session(user_id, "phone", first, family_name)
+                self.send(chat_id, "شماره تلفن همراه خود را وارد کنید:", self.flow_keyboard())
+            else:
+                self.session(user_id, "nid", first, family_name)
+                self.send(chat_id, "مرحله ۳ از ۳\nکد ملی ۱۰ رقمی خود را وارد کنید:", self.flow_keyboard())
+        elif state == "phone" and self.config.platform == "bale":
+            phone = normalize_iranian_mobile(text)
+            if not phone:
+                self.send(chat_id, "شماره تلفن معتبر وارد کنید؛ مثال: 09123456789", self.flow_keyboard())
+                return
+            self.complete_bale_registration(
+                chat_id, user_id, message.get("from", {}), first, last, phone
+            )
         elif state == "nid":
             if not valid_national_id(text):
                 self.send(chat_id, "کد ملی معتبر نیست؛ دوباره وارد کنید.", self.flow_keyboard())

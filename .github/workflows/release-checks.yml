@@ -27,6 +27,7 @@ jobs:
             install-seskia-admin-panel.sh \
             install-hamkare-admin-vps.sh \
             enable-hamkare-telegram-apk-release.sh \
+            enable-hamkare-bale-direct-apk.sh \
             scripts/publish-hamkare-apk.sh
       - name: Python tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'

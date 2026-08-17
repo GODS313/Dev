@@ -22,6 +22,12 @@ class PermissionTests(unittest.TestCase):
     def setUp(self):
         self.admins = frozenset({"10001"})
 
+    def test_iranian_mobile_normalization(self):
+        self.assertEqual(BOT.normalize_iranian_mobile("۰۹۱۲ ۳۴۵ ۶۷۸۹"), "09123456789")
+        self.assertEqual(BOT.normalize_iranian_mobile("+989123456789"), "09123456789")
+        self.assertEqual(BOT.normalize_iranian_mobile("00989123456789"), "09123456789")
+        self.assertEqual(BOT.normalize_iranian_mobile("123"), "")
+
     def test_admin_actions_are_denied_to_regular_users(self):
         for action in BOT.ADMIN_ACTIONS:
             self.assertFalse(BOT.can_access_action(action, "20002", self.admins))
