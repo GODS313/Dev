@@ -169,9 +169,24 @@ def verify_apk_signature(path: Path) -> bool:
     return True
 
 
-class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+class SafeGitHubRedirectHandler(urllib.request.HTTPRedirectHandler):
+    allowed_hosts = {
+        "github.com",
+        "github-releases.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    }
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+        parsed = urllib.parse.urlsplit(newurl)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in self.allowed_hosts
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise urllib.error.HTTPError(newurl, code, "unsafe redirect", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def public_apk_matches(url: str, expected_digest: str, max_bytes: int) -> bool:
@@ -191,8 +206,11 @@ def public_apk_matches(url: str, expected_digest: str, max_bytes: int) -> bool:
     )
     digest = hashlib.sha256()
     received = 0
-    opener = urllib.request.build_opener(NoRedirectHandler())
+    opener = urllib.request.build_opener(SafeGitHubRedirectHandler())
     with opener.open(request, timeout=180) as response:
+        final_host = urllib.parse.urlsplit(response.geturl()).hostname
+        if final_host not in SafeGitHubRedirectHandler.allowed_hosts:
+            return False
         content_type = response.headers.get_content_type().lower()
         if content_type not in APK_MIME_TYPES:
             return False
@@ -205,6 +223,84 @@ def public_apk_matches(url: str, expected_digest: str, max_bytes: int) -> bool:
                 return False
             digest.update(chunk)
     return received > 0 and digest.hexdigest() == expected_digest
+
+
+def release_source_url(source_url: str, digest: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("release digest must be lowercase SHA-256")
+    parsed = urllib.parse.urlsplit(source_url)
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "seskia.online"
+        or parsed.port not in (None, 443)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path != "/download.php"
+        or parsed.fragment
+        or query != [("src", "github-release")]
+    ):
+        raise ValueError("APK_SOURCE_URL must be the approved Seskia release endpoint")
+    query.append(("sha256", digest))
+    return urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(query)))
+
+
+def dispatch_release_workflow(
+    token: str,
+    repository: str,
+    workflow: str,
+    source_url: str,
+    digest: str,
+) -> None:
+    if repository != "GODS313/Dev" or workflow != "publish-hamkare-apk.yml":
+        raise ValueError("GitHub release destination is not approved")
+    payload = json.dumps(
+        {
+            "ref": "main",
+            "inputs": {
+                "source_url": release_source_url(source_url, digest),
+                "sha256": digest,
+            },
+        }
+    ).encode()
+    endpoint = (
+        "https://api.github.com/repos/GODS313/Dev/actions/workflows/"
+        "publish-hamkare-apk.yml/dispatches"
+    )
+    request = urllib.request.Request(
+        endpoint,
+        data=payload,
+        method="POST",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "HamkareTelegramReleaseBridge/1.0",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        if response.status != 204:
+            raise RuntimeError(f"GitHub workflow dispatch returned HTTP {response.status}")
+
+
+def wait_for_public_apk(
+    url: str,
+    expected_digest: str,
+    max_bytes: int,
+    timeout_seconds: int,
+) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            if public_apk_matches(url, expected_digest, max_bytes):
+                return True
+        except (OSError, TimeoutError, urllib.error.URLError, urllib.error.HTTPError):
+            pass
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(5, remaining))
 
 
 @dataclass(frozen=True)
@@ -225,6 +321,11 @@ class Config:
     max_apk_bytes: int
     apk_stage_dir: Path | None = None
     public_verify_enabled: bool = True
+    github_dispatch_token: str = ""
+    github_repository: str = ""
+    github_workflow: str = ""
+    apk_source_url: str = ""
+    release_wait_seconds: int = 300
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -285,6 +386,24 @@ class Config:
         max_apk_bytes = int(os.environ.get("MAX_APK_BYTES", str(20 * 1024 * 1024)))
         if not 1024 * 1024 <= max_apk_bytes <= 20 * 1024 * 1024:
             raise ValueError("MAX_APK_BYTES must be between 1 MB and Telegram's 20 MB download limit")
+        public_verify_enabled = os.environ.get("PUBLIC_VERIFY_ENABLED", "true").lower() == "true"
+        github_dispatch_token = os.environ.get("GITHUB_DISPATCH_TOKEN", "").strip()
+        github_repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+        github_workflow = os.environ.get("GITHUB_WORKFLOW", "").strip()
+        apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
+        release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
+        if enabled and platform == "telegram":
+            if urls["DOWNLOAD_URL"] != "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk":
+                raise ValueError("DOWNLOAD_URL must be the canonical GitHub release")
+            if not re.fullmatch(r"\S{40,255}", github_dispatch_token):
+                raise ValueError("GITHUB_DISPATCH_TOKEN is required for Telegram APK publication")
+            if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
+                raise ValueError("GitHub release workflow configuration is invalid")
+            release_source_url(apk_source_url, "0" * 64)
+            if not public_verify_enabled:
+                raise ValueError("PUBLIC_VERIFY_ENABLED must stay true for Telegram APK publication")
+            if not 60 <= release_wait_seconds <= 600:
+                raise ValueError("RELEASE_WAIT_SECONDS must be between 60 and 600")
         return cls(
             platform=platform,
             token=token,
@@ -301,7 +420,12 @@ class Config:
             apk_deploy_path=target,
             max_apk_bytes=max_apk_bytes,
             apk_stage_dir=stage_dir,
-            public_verify_enabled=os.environ.get("PUBLIC_VERIFY_ENABLED", "true").lower() == "true",
+            public_verify_enabled=public_verify_enabled,
+            github_dispatch_token=github_dispatch_token,
+            github_repository=github_repository,
+            github_workflow=github_workflow,
+            apk_source_url=apk_source_url,
+            release_wait_seconds=release_wait_seconds,
         )
 
 
@@ -718,6 +842,34 @@ class Bot:
              [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
         )
 
+    def publish_public_apk(self, user_id: str, digest: str) -> bool | None:
+        if self.config.github_dispatch_token:
+            dispatch_release_workflow(
+                self.config.github_dispatch_token,
+                self.config.github_repository,
+                self.config.github_workflow,
+                self.config.apk_source_url,
+                digest,
+            )
+            self.audit(user_id, "apk_github_release_dispatched", digest)
+            verified = wait_for_public_apk(
+                self.config.download_url,
+                digest,
+                self.config.max_apk_bytes,
+                self.config.release_wait_seconds,
+            )
+            self.audit(
+                user_id,
+                "apk_github_release_verified" if verified else "apk_github_release_failed",
+                digest,
+            )
+            return verified
+        if not self.config.public_verify_enabled:
+            return None
+        return public_apk_matches(
+            self.config.download_url, digest, self.config.max_apk_bytes
+        )
+
     def handle_apk_upload(self, message: dict, user_id: str, chat_id: object) -> bool:
         if self.admin_state(user_id) != "awaiting_apk":
             return False
@@ -799,7 +951,21 @@ class Bot:
                     )
                     self.connection.commit()
                     self.audit(user_id, "apk_duplicate", f"sha256={digest}")
-                    self.send(chat_id, "این فایل همین حالا نسخه فعال است و دوباره منتشر نشد.", self.admin_menu())
+                    if self.config.github_dispatch_token:
+                        public_verified = self.publish_public_apk(user_id, digest)
+                        if not public_verified:
+                            raise ValueError("انتشار GitHub تکمیل نشد؛ نسخه فعلی سرور حفظ شد.")
+                        self.send(
+                            chat_id,
+                            "✅ همین APK دوباره بررسی و انتشار GitHub آن تأیید شد.",
+                            self.admin_menu(),
+                        )
+                        return True
+                    self.send(
+                        chat_id,
+                        "این فایل همین حالا نسخه فعال است و دوباره منتشر نشد.",
+                        self.admin_menu(),
+                    )
                     return True
                 if target.exists():
                     old_digest = sha256_file(target)
@@ -822,14 +988,11 @@ class Bot:
             )
             self.connection.commit()
             self.audit(user_id, "apk_replaced", f"size={size};sha256={digest}")
-            public_verified = None
-            if self.config.public_verify_enabled:
-                try:
-                    public_verified = public_apk_matches(
-                        self.config.download_url, digest, self.config.max_apk_bytes
-                    )
-                except Exception:
-                    public_verified = False
+            try:
+                public_verified = self.publish_public_apk(user_id, digest)
+            except Exception:
+                public_verified = False
+            if public_verified is not None:
                 self.audit(user_id, "apk_public_verified" if public_verified else "apk_public_verify_failed", digest)
                 if not public_verified:
                     restored = self.restore_after_failed_publication(
@@ -851,7 +1014,7 @@ class Bot:
                 chat_id,
                 f"✅ فایل APK با موفقیت جایگزین شد.\n"
                 f"اندازه: {size / 1024 / 1024:.2f} MB\nSHA-256: {digest[:16]}…\n"
-                f"امضای release APK: تأیید شد\nتطبیق لینک عمومی: {public_text}\n\n"
+                f"امضای release APK: تأیید شد\nانتشار GitHub و تطبیق لینک عمومی: {public_text}\n\n"
                 f"لینک عمومی بدون تغییر باقی ماند:\n{self.config.download_url}",
                 self.admin_menu(),
             )
@@ -1002,14 +1165,11 @@ class Bot:
                     os.close(directory_fd)
             self.clear_sessions(user_id)
             self.audit(user_id, "apk_rolled_back", f"size={size};sha256={digest}")
-            public_verified = None
-            if self.config.public_verify_enabled:
-                try:
-                    public_verified = public_apk_matches(
-                        self.config.download_url, digest, self.config.max_apk_bytes
-                    )
-                except Exception:
-                    public_verified = False
+            try:
+                public_verified = self.publish_public_apk(user_id, digest)
+            except Exception:
+                public_verified = False
+            if public_verified is not None:
                 if not public_verified:
                     restored = self.restore_after_failed_publication(
                         target, stage_dir, digest, current_backup
