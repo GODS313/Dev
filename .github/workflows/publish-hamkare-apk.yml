@@ -1,0 +1,39 @@
+name: Publish Hamkare APK Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-hamkare-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download current Hamkare APK
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2 \
+            --output hamkare.apk \
+            https://seskia.online/est/download
+          test "$(stat -c '%s' hamkare.apk)" -gt 1000000
+          unzip -tq hamkare.apk
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create hamkare-v1 \
+            hamkare.apk#hamkare.apk \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "Hamkare Android" \
+            --notes "نسخه رسمی اندروید همکاره." \
+            --latest
