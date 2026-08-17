@@ -20,7 +20,7 @@ jobs:
           php -l seskia-admin/download.php
           php -l seskia-admin/panel-lib.php
       - name: Shell syntax
-        run: bash -n deploy-vps.sh deploy-hamkare-bots.sh install-seskia-admin-panel.sh
+        run: bash -n deploy-vps.sh deploy-hamkare-bots.sh install-seskia-admin-panel.sh install-hamkare-admin-vps.sh
       - name: Python tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Node tests

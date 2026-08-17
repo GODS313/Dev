@@ -36,6 +36,8 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 پنل production فقط در `https://adlisho.online/admin` ارائه می‌شود. `/admin.html` و `/admin.php` به آن redirect می‌شوند. سه secret اجباری `ADMIN_PASSWORD`، `CONFIG_ENCRYPTION_KEY` و `VPS_SYNC_KEY` را در Cloudflare encrypted secrets قرار دهید. `VPS_SYNC_KEY` باید یک مقدار تصادفی مستقل ۳۲ تا ۱۲۸ نویسه‌ای باشد و همان مقدار هنگام نصب sync agent روی VPS وارد شود.
 
+قرارداد پاسخ production در `GET /api/admin/sync` از کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` تشکیل می‌شود. مقدار هر بستر یا `null` است یا شیئی با کلیدهای دقیق `token` و `chat_id`؛ تغییر این نام‌ها باید هم‌زمان در Function، عامل VPS و این مستند انجام شود.
+
 مقصد دانلود در کد ثابت است: `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk`. پنل اجازه ثبت مقصد دیگری را نمی‌دهد و مسیرهای سازگاری `/download` و `/download.php` با پاسخ 302 به همین Release هدایت می‌شوند.
 
 ## 4) دامنه و HTTPS
