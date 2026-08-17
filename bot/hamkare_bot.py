@@ -105,7 +105,7 @@ def can_access_action(action: str, user_id: str, admin_ids: frozenset[str]) -> b
 def can_upload_apk(
     platform: str, user_id: str, admin_ids: frozenset[str], enabled: bool
 ) -> bool:
-    return platform == "telegram" and enabled and user_id in admin_ids
+    return platform in {"telegram", "bale"} and enabled and user_id in admin_ids
 
 
 def verify_apk_archive(path: Path) -> tuple[int, str]:
@@ -353,7 +353,7 @@ class Config:
         raw_target_path = Path(raw_target) if raw_target else None
         target = raw_target_path.resolve(strict=False) if raw_target_path else None
         stage_dir = None
-        if enabled and platform == "telegram":
+        if enabled:
             if target is None or not target.is_absolute():
                 raise ValueError("APK_DEPLOY_PATH must be an absolute path")
             if raw_target_path is not None and raw_target_path.is_symlink():
@@ -392,11 +392,11 @@ class Config:
         github_workflow = os.environ.get("GITHUB_WORKFLOW", "").strip()
         apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
         release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
-        if enabled and platform == "telegram":
+        if enabled:
             if urls["DOWNLOAD_URL"] != "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk":
                 raise ValueError("DOWNLOAD_URL must be the canonical GitHub release")
             if not re.fullmatch(r"\S{40,255}", github_dispatch_token):
-                raise ValueError("GITHUB_DISPATCH_TOKEN is required for Telegram APK publication")
+                raise ValueError("GITHUB_DISPATCH_TOKEN is required for APK publication")
             if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
                 raise ValueError("GitHub release workflow configuration is invalid")
             release_source_url(apk_source_url, "0" * 64)
@@ -602,7 +602,7 @@ class Bot:
             ],
             [{"text": "⏸ توقف/ادامه ثبت‌نام", "callback_data": "admin_toggle_pause"}],
         ]
-        if self.config.platform == "telegram" and self.config.apk_upload_enabled:
+        if self.config.apk_upload_enabled:
             rows.append(
                 [{"text": "🔄 تعویض فایل APK", "callback_data": "admin_upload"}]
             )
