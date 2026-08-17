@@ -5,7 +5,7 @@ https://www.adlisho.online/* https://adlisho.online/:splat 301
 /register/* /index.html 200
 /exam /index.html 200
 /exam/* /index.html 200
-/download.php /download 302
+/download.php /download 301
 /result /result.html 200
 /privacy /privacy.html 200
 /terms /terms.html 200

@@ -38,7 +38,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 قرارداد پاسخ production در `GET /api/admin/sync` از کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` تشکیل می‌شود. مقدار هر بستر یا `null` است یا شیئی با کلیدهای دقیق `token` و `chat_id`؛ تغییر این نام‌ها باید هم‌زمان در Function، عامل VPS و این مستند انجام شود.
 
-مقصد دانلود در کد ثابت است: `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk`. پنل اجازه ثبت مقصد دیگری را نمی‌دهد و مسیرهای سازگاری `/download` و `/download.php` با پاسخ 302 به همین Release هدایت می‌شوند.
+مقصد دانلود از کلید `download_source` در D1 خوانده می‌شود و فقط URL معتبر HTTPS در پنل پذیرفته می‌شود. fallback کد `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` است؛ `/download.php` با 301 به `/download` می‌رود و Function سپس با 302 به مقدار جاری D1 یا fallback هدایت می‌کند.
 
 ## 4) دامنه و HTTPS
 
@@ -79,7 +79,7 @@ sudo bash deploy-hamkare-bots.sh
 curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/GODS313/Dev/main/install-hamkare-admin-vps.sh && sudo bash /tmp/install-hamkare-admin-vps.sh
 ```
 
-این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` در هر دو env همیشه URL نهایی GitHub Release است.
+این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` هر env از `download_source` جاری D1 می‌آید و در نبود آن به GitHub Release رسمی برمی‌گردد.
 
 ## 7) انتشار APK
 

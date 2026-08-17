@@ -8,6 +8,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 });
 
 const RELEASE_URL = 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk';
+const CANONICAL_DOWNLOAD_URL = 'https://adlisho.online/download';
 
 const base64ToBytes = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 
@@ -48,8 +49,8 @@ export async function onRequestGet({ request, env }) {
     };
     return json({
       revision: current.config_revision || '',
-      canonical_download_url: RELEASE_URL,
-      download_source: RELEASE_URL,
+      canonical_download_url: CANONICAL_DOWNLOAD_URL,
+      download_source: current.download_source || RELEASE_URL,
       telegram: await platform('telegram'),
       bale: await platform('bale'),
     });

@@ -1,0 +1,48 @@
+name: Deploy Cloudflare production
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_dns:
+        description: Apply the reviewed apex/www DNS plan
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/release-checks.yml
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@latest d1 migrations apply "${{ secrets.CLOUDFLARE_D1_DATABASE_NAME }}" --remote
+      - name: Deploy Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@latest pages deploy . --project-name "${{ secrets.CLOUDFLARE_PAGES_PROJECT }}" --branch main
+      - name: Plan or apply narrowly scoped DNS changes
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CF_PAGES_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+          APPLY_DNS: ${{ inputs.apply_dns }}
+        run: python3 scripts/cloudflare_dns_guard.py
