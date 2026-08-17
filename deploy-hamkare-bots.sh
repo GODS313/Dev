@@ -119,7 +119,71 @@ repair_mode() {
   echo '✅ Repair امن کامل شد؛ env و secretها بازنویسی نشدند.'
 }
 
+restore_adlisho_routes() {
+  [[ "$APP" =~ ^/(opt|srv)/[A-Za-z0-9._/-]+$ ]] || { echo 'HAMKARE_APP_DIR باید زیر /opt یا /srv باشد.' >&2; return 1; }
+  APP="$(realpath -m -- "$APP")"
+  [[ -d "$APP" && -f "$APP/telegram.env" && -f "$APP/bale.env" ]] || { echo 'نصب کامل ربات‌ها پیدا نشد.' >&2; return 1; }
+  local backup
+  backup="${APP}.routes-backup.$(date +%Y%m%d-%H%M%S)"
+  install -d -o root -g root -m 0700 "$backup"
+  cp -a "$APP/telegram.env" "$APP/bale.env" "$APP/bot.py" "$backup/"
+  install -o root -g root -m 0750 "$SCRIPT_DIR/bot/hamkare_bot.py" "$APP/bot.py"
+  python3 - "$APP/telegram.env" "$APP/bale.env" <<'PY'
+import os
+import stat
+import sys
+import tempfile
+
+updates = {
+    "DOWNLOAD_URL": "https://adlisho.online/download.php",
+    "SITE_URL": "https://adlisho.online",
+    "SUPPORT_URL": "https://adlisho.online/contact.html",
+    "PRIVACY_URL": "https://adlisho.online/privacy.html",
+    "TRACKING_URL": "https://adlisho.online/result.html",
+}
+for path in sys.argv[1:]:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise RuntimeError(f"unsafe env: {path}")
+        with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as source:
+            lines = source.read().splitlines()
+    finally:
+        os.close(descriptor)
+    seen, output = set(), []
+    for line in lines:
+        key = line.split("=", 1)[0] if "=" in line else ""
+        if key in updates:
+            output.append(f"{key}={updates[key]}")
+            seen.add(key)
+        else:
+            output.append(line)
+    output.extend(f"{key}={value}" for key, value in updates.items() if key not in seen)
+    fd, temporary = tempfile.mkstemp(prefix=".adlisho-routes-", dir=os.path.dirname(path))
+    try:
+        os.fchmod(fd, stat.S_IMODE(info.st_mode))
+        os.fchown(fd, info.st_uid, info.st_gid)
+        with os.fdopen(fd, "w", encoding="utf-8") as destination:
+            destination.write("\n".join(output) + "\n")
+            destination.flush()
+            os.fsync(destination.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+PY
+  python3 -m py_compile "$APP/bot.py"
+  systemctl restart hamkare-telegram.service hamkare-bale.service
+  sleep 5
+  systemctl is-active --quiet hamkare-telegram.service
+  systemctl is-active --quiet hamkare-bale.service
+  echo '✅ سایت، تلگرام و بله به https://adlisho.online/download.php متصل شدند.'
+  echo "✅ توکن‌ها و Chat IDها تغییر نکردند. بکاپ: $backup"
+}
+
 if [[ "${1:-}" == --repair ]]; then repair_mode; exit $?; fi
+if [[ "${1:-}" == --restore-adlisho-routes ]]; then restore_adlisho_routes; exit $?; fi
 
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 [[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
