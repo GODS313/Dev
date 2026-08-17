@@ -38,7 +38,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 قرارداد پاسخ production در `GET /api/admin/sync` از کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` تشکیل می‌شود. مقدار هر بستر یا `null` است یا شیئی با کلیدهای دقیق `token` و `chat_id`؛ تغییر این نام‌ها باید هم‌زمان در Function، عامل VPS و این مستند انجام شود.
 
-مقصد دانلود در کد ثابت است: `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk`. پنل اجازه ثبت مقصد دیگری را نمی‌دهد و مسیرهای سازگاری `/download` و `/download.php` با پاسخ 302 به همین Release هدایت می‌شوند.
+مسیر عمومی دانلود ثابت است: `https://adlisho.online/download.php`. پنل منبع پشت‌صحنه را روی `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` نگه می‌دارد و مسیرهای `/download` و `/download.php` همان باینری Release را تحویل می‌دهند.
 
 ## 4) دامنه و HTTPS
 
@@ -53,7 +53,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 2. `POST /api/register` با JSON معتبر باید `201` و کد پیگیری برگرداند.
 3. ثبت دوباره همان موبایل باید `200` برگرداند، اما برای جلوگیری از افشای اطلاعات نباید کد پیگیری قبلی را نمایش دهد؛ بازیابی از مسیر پشتیبانی انجام می‌شود.
 4. `GET /api/result?code=<CODE>&last4=<LAST4>` باید نتیجه را برگرداند.
-5. `GET /download` باید به URL نهایی GitHub Release redirect شود.
+5. `GET /download` باید به GitHub Release پشت‌صحنه redirect شود و دکمه‌ها باید URL عمومی Adlisho را حفظ کنند.
 6. `GET /download.php` باید در نهایت به همان URL redirect شود.
 7. در D1 Console درج سطر در جدول `registrations` را تأیید کنید.
 
@@ -69,7 +69,7 @@ sudo bash deploy-hamkare-bots.sh
 - شناسه عددی مدیران تلگرام و بله
 - نام برند و URLها از env یا مقادیر پیش‌فرض امن
 
-کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود. تعویض APK در بله همیشه غیرفعال است و در تلگرام نیز تا زمان اجرای فعال‌ساز امن GitHub غیرفعال می‌ماند. دکمه دانلود تلگرام و بله هر دو URL نهایی GitHub Release را از `DOWNLOAD_URL` می‌گیرند.
+کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود. تعویض APK در بله همیشه غیرفعال است و در تلگرام نیز تا زمان اجرای فعال‌ساز امن GitHub غیرفعال می‌ماند. دکمه دانلود تلگرام و بله هر دو `https://adlisho.online/download.php` را از `DOWNLOAD_URL` می‌گیرند.
 
 پس از نصب، `/start` را یک‌بار با حساب مدیر و یک‌بار با حساب کاربر عادی تست کنید. در هیچ‌کدام نباید «تعویض فایل APK» یا rollback نمایش داده شود.
 
@@ -79,7 +79,7 @@ sudo bash deploy-hamkare-bots.sh
 curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/GODS313/Dev/main/install-hamkare-admin-vps.sh && sudo bash /tmp/install-hamkare-admin-vps.sh
 ```
 
-این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` در هر دو env همیشه URL نهایی GitHub Release است.
+این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` در هر دو env همیشه مسیر عمومی ثابت Adlisho است.
 
 ## 7) انتشار APK
 
@@ -99,4 +99,4 @@ workflow دائمی `.github/workflows/publish-hamkare-apk.yml` انتشار ر�
 
 برای rollback خود APK، مدیر تلگرام گزینه بازگردانی را تأیید می‌کند؛ همان نسخه پشتیبان دوباره اعتبارسنجی و از مسیر workflow به latest GitHub Release تبدیل می‌شود. Release تازه تا پیش از آپلود asset به‌صورت Draft می‌ماند و در صورت شکست تأیید نهایی خودکار حذف می‌شود. برای rollback کامل سرویس‌های استخدامی، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
 
-بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیرهای قدیمی محلی صرفاً redirect سازگاری به GitHub Release هستند.
+بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیر عمومی Adlisho ثابت می‌ماند و GitHub Release منبع پشت‌صحنه است.

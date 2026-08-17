@@ -196,6 +196,7 @@ def verify_apk_signature(path: Path) -> bool:
 
 class SafeGitHubRedirectHandler(urllib.request.HTTPRedirectHandler):
     allowed_hosts = {
+        "adlisho.online",
         "seskia.online",
         "github.com",
         "github-releases.githubusercontent.com",
@@ -419,11 +420,11 @@ class Config:
         apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
         release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
         if enabled:
-            github_url = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+            public_url = "https://adlisho.online/download.php"
             local_url = "https://seskia.online/download.php?src=hamkare"
             if github_dispatch_token:
-                if urls["DOWNLOAD_URL"] != github_url:
-                    raise ValueError("DOWNLOAD_URL must be the canonical GitHub release")
+                if urls["DOWNLOAD_URL"] != public_url:
+                    raise ValueError("DOWNLOAD_URL must be the canonical Adlisho endpoint")
                 if not re.fullmatch(r"\S{40,255}", github_dispatch_token):
                     raise ValueError("GITHUB_DISPATCH_TOKEN format is invalid")
                 if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":

@@ -23,7 +23,7 @@ class BaleSimpleFlowStaticTests(unittest.TestCase):
         self.assertIn('"https://tapi.bale.ai/file/bot"', BOT)
 
     def test_activator_uses_stable_github_file_and_preserves_secrets(self):
-        self.assertIn("https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk", ENABLE)
+        self.assertIn("https://adlisho.online/download.php", ENABLE)
         self.assertIn('"APK_UPLOAD_ENABLED": "false"', ENABLE)
         self.assertIn('"APK_DEPLOY_PATH": ""', ENABLE)
         self.assertIn('cp -a "$ENV_FILE" "$BACKUP_DIR/bale.env"', ENABLE)

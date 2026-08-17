@@ -28,16 +28,13 @@ PRODUCTION_TEXT = (
 
 class ReleaseStaticTests(unittest.TestCase):
     def test_canonical_download_url_is_consistent(self):
-        expected = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+        expected = "https://adlisho.online/download.php"
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["apk_url"], expected)
         for relative_path in (
             "index.html",
             "deploy-hamkare-bots.sh",
             "install-hamkare-admin-vps.sh",
-            "admin.html",
-            "functions/download.js",
-            "functions/api/admin/config.js",
             "functions/api/admin/sync.js",
             "seskia-netlify/index.html",
             "seskia-netlify/assets/app.js",
@@ -48,7 +45,6 @@ class ReleaseStaticTests(unittest.TestCase):
         forbidden = (
             "سازمان" + " ادلیشو",
             "https://seskia.online/est/" + "download",
-            "https://adlisho.online/" + "download.php",
             "143.14." + "59.50",
             "http:" + "//",
         )

@@ -17,6 +17,7 @@ PRODUCTION_DOCS = {
 RELEASE_URL_RE = re.compile(
     r'https://github\.com/GODS313/Dev/releases/latest/download/[A-Za-z0-9._-]+\.apk'
 )
+PUBLIC_URL_RE = re.compile(r'https://adlisho\.online/download\.php')
 SYNC_TOP_LEVEL_KEYS = {
     'revision',
     'canonical_download_url',
@@ -48,10 +49,8 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
     def test_release_target_does_not_drift_across_runtime_and_production_docs(self):
         sources = {
             'functions/api/admin/sync.js': SYNC_API,
-            'install-hamkare-admin-vps.sh': INSTALLER,
             'functions/download.js': DOWNLOAD,
             'scripts/publish-hamkare-apk.sh': RELEASE_PUBLISHER,
-            'enable-hamkare-telegram-apk-release.sh': TELEGRAM_RELEASE_ENABLE,
             **PRODUCTION_DOCS,
         }
         urls_by_source = {
@@ -63,6 +62,20 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         canonical = urls_by_source['functions/api/admin/sync.js']
         for name, urls in urls_by_source.items():
             self.assertEqual(urls, canonical, f'download target drifted in {name}')
+
+    def test_public_adlisho_target_does_not_drift(self):
+        sources = {
+            'functions/api/admin/sync.js': SYNC_API,
+            'install-hamkare-admin-vps.sh': INSTALLER,
+            'enable-hamkare-telegram-apk-release.sh': TELEGRAM_RELEASE_ENABLE,
+            **PRODUCTION_DOCS,
+        }
+        for name, content in sources.items():
+            self.assertEqual(
+                set(PUBLIC_URL_RE.findall(content)),
+                {'https://adlisho.online/download.php'},
+                f'public Adlisho target drifted in {name}',
+            )
 
     def test_sync_contract_keys_do_not_drift_between_producer_consumer_and_docs(self):
         response = re.search(r'return json\(\{\n(?P<body>.*?)\n\s*\}\);', SYNC_API, re.DOTALL)

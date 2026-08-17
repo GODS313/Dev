@@ -84,7 +84,7 @@ class PermissionTests(unittest.TestCase):
                 token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
                 log_chat_id="-1001234567890",
                 admin_ids=self.admins,
-                download_url="https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
+                download_url="https://adlisho.online/download.php",
                 site_url="https://adlisho.online",
                 support_url="https://adlisho.online/contact.html",
                 privacy_url="https://adlisho.online/privacy.html",
@@ -120,8 +120,8 @@ class PermissionTests(unittest.TestCase):
             self.assertIn("admin_upload", panel_callbacks)
             self.assertIn("admin_rollback", panel_callbacks)
 
-    def test_bale_download_button_uses_the_official_github_release(self):
-        expected = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+    def test_bale_download_button_uses_the_canonical_adlisho_endpoint(self):
+        expected = "https://adlisho.online/download.php"
         with tempfile.TemporaryDirectory() as directory:
             config = BOT.Config(
                 platform="bale",
@@ -154,7 +154,7 @@ class ValidationTests(unittest.TestCase):
             token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             log_chat_id="-1001234567890",
             admin_ids=frozenset({"10001"}),
-            download_url="https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
+            download_url="https://adlisho.online/download.php",
             site_url="https://adlisho.online",
             support_url="https://adlisho.online/contact.html",
             privacy_url="https://adlisho.online/privacy.html",
@@ -442,7 +442,7 @@ class ValidationTests(unittest.TestCase):
             "BOT_TOKEN": "1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             "LOG_CHAT_ID": "-1001234567890",
             "ADMIN_IDS": "10001",
-            "DOWNLOAD_URL": "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
+            "DOWNLOAD_URL": "https://adlisho.online/download.php",
             "SITE_URL": "https://adlisho.online",
             "SUPPORT_URL": "https://adlisho.online/contact.html",
             "PRIVACY_URL": "https://adlisho.online/privacy.html",

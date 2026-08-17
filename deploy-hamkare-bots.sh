@@ -9,7 +9,7 @@ if ! command -v python3 >/dev/null; then
 fi
 command -v realpath >/dev/null || { echo 'realpath در دسترس نیست.' >&2; exit 1; }
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 
 render_service_unit() {
@@ -125,7 +125,7 @@ SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 [[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
 BRAND_NAME="${BRAND_NAME:-همکاره}"
 SITE_URL="${SITE_URL:-https://adlisho.online}"
-DOWNLOAD_URL='https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
+DOWNLOAD_URL='https://adlisho.online/download.php'
 SUPPORT_URL="${SUPPORT_URL:-https://adlisho.online/contact.html}"
 PRIVACY_URL="${PRIVACY_URL:-https://adlisho.online/privacy.html}"
 TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"

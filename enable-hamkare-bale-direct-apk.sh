@@ -16,7 +16,7 @@ APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 ENV_FILE="$APP_DIR/bale.env"
 BOT_TARGET="$APP_DIR/bot.py"
 SERVICE=hamkare-bale.service
-PUBLIC_URL='https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
+PUBLIC_URL='https://adlisho.online/download.php'
 BACKUP_DIR="$(mktemp -d /var/backups/hamkare-bale-github-download-XXXXXXXX)"
 
 for source in "$SOURCE_BOT" "$ENV_FILE" "$BOT_TARGET"; do
@@ -94,7 +94,7 @@ sleep 4
 systemctl is-active --quiet "$SERVICE"
 
 INSTALL_COMPLETE=1
-echo '✅ دکمه دانلود بله مستقیماً به آخرین GitHub Release متصل شد.'
+echo '✅ دکمه دانلود بله به مسیر ثابت Adlisho متصل شد.'
 echo "لینک ثابت: $PUBLIC_URL"
 echo 'ربات هیچ APKای دریافت یا منتشر نمی‌کند.'
 echo "بکاپ: $BACKUP_DIR"
