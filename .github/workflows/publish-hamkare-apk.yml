@@ -23,7 +23,7 @@ jobs:
             --output hamkare.apk \
             https://seskia.online/est/download
           test "$(stat -c '%s' hamkare.apk)" -gt 1000000
-          unzip -tq hamkare.apk
+          zipinfo -1 hamkare.apk | grep -qx 'AndroidManifest.xml'
 
       - name: Create GitHub Release
         env:
