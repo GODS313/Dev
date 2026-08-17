@@ -68,6 +68,8 @@ class ApkReleaseBridgeStaticTests(unittest.TestCase):
         self.assertIn('def wait_for_public_apk(', BOT)
         self.assertIn('self.publish_public_apk(user_id, digest)', BOT)
         self.assertIn('SafeGitHubRedirectHandler', BOT)
+        self.assertIn('direct_admin_upload = (', BOT)
+        self.assertIn('not direct_admin_upload', BOT)
 
     def test_panel_reinstall_preserves_only_a_complete_bridge(self):
         self.assertIn('bridge_ready = (', PANEL_INSTALLER)

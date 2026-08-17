@@ -934,12 +934,11 @@ class Bot:
     def handle_apk_upload(self, message: dict, user_id: str, chat_id: object) -> bool:
         document = message.get("document") or {}
         file_name = str(document.get("file_name", ""))
-        direct_bale_upload = (
-            self.config.platform == "bale"
-            and self.is_admin(user_id)
+        direct_admin_upload = (
+            self.is_admin(user_id)
             and file_name.lower().endswith(".apk")
         )
-        if self.admin_state(user_id) != "awaiting_apk" and not direct_bale_upload:
+        if self.admin_state(user_id) != "awaiting_apk" and not direct_admin_upload:
             return False
         if not can_upload_apk(
             self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled

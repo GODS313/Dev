@@ -15,13 +15,15 @@ class BaleSimpleFlowStaticTests(unittest.TestCase):
         self.assertIn('command == "/admin"', BOT)
 
     def test_admin_forwarded_apk_is_detected_without_panel_state(self):
-        self.assertIn("direct_bale_upload = (", BOT)
-        self.assertIn('self.config.platform == "bale"', BOT)
+        self.assertIn("direct_admin_upload = (", BOT)
+        self.assertIn("self.is_admin(user_id)", BOT)
         self.assertIn('file_name.lower().endswith(".apk")', BOT)
+        self.assertIn('not direct_admin_upload', BOT)
+        self.assertIn('"https://api.telegram.org/file/bot"', BOT)
         self.assertIn('"https://tapi.bale.ai/file/bot"', BOT)
 
     def test_activator_uses_stable_github_file_and_preserves_secrets(self):
-        self.assertIn("https://raw.githubusercontent.com/GODS313/Dev/main/uploads/hamkare.apk", ENABLE)
+        self.assertIn("https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk", ENABLE)
         self.assertIn('"APK_UPLOAD_ENABLED": "false"', ENABLE)
         self.assertIn('"APK_DEPLOY_PATH": ""', ENABLE)
         self.assertIn('cp -a "$ENV_FILE" "$BACKUP_DIR/bale.env"', ENABLE)
