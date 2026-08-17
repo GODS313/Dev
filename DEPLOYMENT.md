@@ -79,9 +79,20 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 
 این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` در هر دو env همیشه URL نهایی GitHub Release است.
 
-## 7) انتشار APK
+## 7) انتشار امن APK
 
-در Releases مخزن `GODS313/Dev` یک Release جدید بسازید و asset را با نام دقیق `hamkare.apk` بارگذاری کنید. پیش از انتشار، ساختار APK، امضای release و SHA-256 را بررسی کنید. پس از انتشار، URL نهایی `releases/latest/download/hamkare.apk` را با دانلود واقعی و نام فایل کنترل کنید.
+در GitHub به `Actions → Publish approved Hamkare APK → Run workflow` بروید، شاخه `main` را انتخاب کنید و فقط این دو مقدار را وارد کنید:
+
+- `source_url`: لینک عمومی HTTPS فایل APK؛ لینک حاوی token یا اطلاعات محرمانه وارد نکنید.
+- `sha256`: مقدار SHA-256 تأییدشده و دقیق فایل، شامل ۶۴ نویسه هگزادسیمال.
+
+اجرای copy-paste با GitHub CLI:
+
+```bash
+gh workflow run publish-hamkare-apk.yml --repo GODS313/Dev --ref main -f source_url='https://example.com/approved.apk' -f sha256='<64_HEX_SHA256>'
+```
+
+workflow لینک و redirectها را به HTTPS عمومی محدود می‌کند، حجم را بین ۶۴ KiB و ۱۰۰ MiB نگه می‌دارد، SHA-256 و CRC همه ورودی‌های ZIP را بررسی می‌کند، وجود `AndroidManifest.xml`، `classes.dex`، `resources.arsc` و metadata امضای Android را الزامی می‌کند و مسیرهای ناسالم، فایل رمز‌شده، symlink و archive حجیم را رد می‌کند. در صورت موفقیت یک Release جدید با asset دقیق `hamkare.apk` ساخته و latest می‌شود؛ بنابراین URL ثابت `releases/latest/download/hamkare.apk` بدون تغییر باقی می‌ماند. هیچ APK یا `.release/parts` در commitها قرار نمی‌گیرد.
 
 ## 8) Rollback
 
