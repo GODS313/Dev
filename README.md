@@ -9,7 +9,7 @@
 - تولید کد پیگیری امن و جلوگیری از ثبت تکراری
 - پیگیری نتیجه با کد اختصاصی و چهار رقم آخر موبایل
 - اتصال Cloudflare Pages Functions به D1
-- برند، پشتیبانی، پیگیری و پیام‌رسان‌ها از تنظیمات مرکزی؛ لینک دانلود روی GitHub Release رسمی ثابت است
+- برند، پشتیبانی، پیگیری و پیام‌رسان‌ها از تنظیمات مرکزی؛ منبع دانلود در D1 و fallback روی GitHub Release رسمی است
 - اعتبارسنجی سمت کاربر و سرور، محدودسازی درخواست و خروجی امن
 - منوی شیشه‌ای کامل برای تلگرام و بله
 - جداسازی قطعی منوی کاربر و مدیر با allowlist شناسه عددی
@@ -23,13 +23,13 @@
 
 ## پنل production و منبع واحد تنظیمات
 
-مسیر canonical مدیریت فقط `https://adlisho.online/admin` است و Cloudflare D1 منبع تنظیمات توکن و Chat ID تلگرام و بله است. لینک دانلود قابل ویرایش نیست و در پنل نیز فقط GitHub Release رسمی نمایش داده می‌شود. ذخیره‌های چندفیلدی با `D1 batch` همراه یک `config_revision` انجام می‌شوند؛ بنابراین revision ناقص یا ترکیبی منتشر نمی‌شود.
+مسیر canonical مدیریت فقط `https://adlisho.online/admin` است و Cloudflare D1 منبع تنظیمات توکن، Chat ID و `download_source` است. منبع دانلود از پنل فقط به‌صورت HTTPS معتبر ذخیره می‌شود و در نبود مقدار معتبر، GitHub Release رسمی fallback است. ذخیره‌های چندفیلدی با `D1 batch` همراه یک `config_revision` انجام می‌شوند؛ بنابراین revision ناقص یا ترکیبی منتشر نمی‌شود.
 
 `GET /api/admin/sync` فقط با secret مستقل `VPS_SYNC_KEY` قابل خواندن است. عامل همگام‌سازی VPS هر ۳۰ ثانیه revision را دریافت، فایل env هر بستر را جداگانه و با `fsync + rename` جایگزین و فقط همان سرویسی را restart می‌کند که مقدارهایش واقعاً تغییر کرده‌اند. تغییر تلگرام به `bale.env` دست نمی‌زند و سرویس بله را restart نمی‌کند؛ تغییر صرفِ منبع APK نیز هیچ رباتی را restart نمی‌کند.
 
 قرارداد production این endpoint شامل کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` است. مقدار هر بستر یا `null` است یا فقط کلیدهای `token` و `chat_id` را دارد؛ عامل VPS نیز دقیقاً همین نام‌ها را مصرف می‌کند.
 
-مسیر نهایی و یکتای دانلود `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` است. دکمه سایت، QR، ربات تلگرام، ربات بله، پنل و مسیرهای سازگاری `/download` و `/download.php` همگی به همین Release هدایت می‌شوند.
+fallback نهایی دانلود `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` است. مسیر عمومی `/download` مقدار جاری D1 را می‌خواند و `/download.php` با 301 به آن هدایت می‌شود؛ عامل sync نیز همین `download_source` را به ربات‌ها می‌رساند.
 
 نصب عامل sync روی VPS:
 

@@ -8,7 +8,8 @@ APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 TG_ENV="$APP_DIR/telegram.env"
 BALE_ENV="$APP_DIR/bale.env"
 SYNC_URL="${HAMKARE_SYNC_URL:-https://adlisho.online/api/admin/sync}"
-PUBLIC_DOWNLOAD_URL='https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
+CANONICAL_DOWNLOAD_URL='https://adlisho.online/download'
+FALLBACK_RELEASE_URL='https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
 SYNC_PROGRAM=/usr/local/sbin/hamkare-admin-sync
 SYNC_ENV=/etc/hamkare-admin-sync.env
 STATE_DIR=/var/lib/hamkare-admin-sync
@@ -58,7 +59,8 @@ TG_ENV = os.environ.get("HAMKARE_TELEGRAM_ENV", "/opt/hamkare-bots/telegram.env"
 BALE_ENV = os.environ.get("HAMKARE_BALE_ENV", "/opt/hamkare-bots/bale.env")
 SYNC_URL = os.environ.get("HAMKARE_SYNC_URL", "https://adlisho.online/api/admin/sync")
 SYNC_KEY = os.environ["VPS_SYNC_KEY"]
-PUBLIC_DOWNLOAD_URL = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+CANONICAL_DOWNLOAD_URL = "https://adlisho.online/download"
+FALLBACK_RELEASE_URL = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
 STATE_FILE = "/var/lib/hamkare-admin-sync/state.json"
 LOCK_FILE = "/run/lock/hamkare-admin-sync.lock"
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_:.-]{20,256}$")
@@ -78,11 +80,12 @@ def fetch_config():
     if len(raw) > 65536:
         raise RuntimeError("sync response is too large")
     data = json.loads(raw)
-    if data.get("canonical_download_url") != PUBLIC_DOWNLOAD_URL:
+    if data.get("canonical_download_url") != CANONICAL_DOWNLOAD_URL:
         raise RuntimeError("canonical download URL mismatch")
-    source = str(data.get("download_source", ""))
+    source = str(data.get("download_source") or FALLBACK_RELEASE_URL)
     if not source.startswith("https://"):
         raise RuntimeError("invalid download source")
+    data["download_source"] = source
     return data
 
 
@@ -99,7 +102,7 @@ def platform_values(data, name):
     return {
         "BOT_TOKEN": token,
         "LOG_CHAT_ID": chat_id,
-        "DOWNLOAD_URL": PUBLIC_DOWNLOAD_URL,
+        "DOWNLOAD_URL": data["download_source"],
     }
 
 
@@ -240,14 +243,33 @@ chmod 0750 "$SYNC_PROGRAM"
 chown root:root "$SYNC_PROGRAM"
 python3 -m py_compile "$SYNC_PROGRAM"
 
-cat > "$SYNC_ENV" <<EOF
-VPS_SYNC_KEY=$SYNC_KEY
-HAMKARE_SYNC_URL=$SYNC_URL
-HAMKARE_TELEGRAM_ENV=$TG_ENV
-HAMKARE_BALE_ENV=$BALE_ENV
-EOF
-chmod 0600 "$SYNC_ENV"
-chown root:root "$SYNC_ENV"
+SYNC_ENV_TMP="$(mktemp --tmpdir="$(dirname "$SYNC_ENV")" .hamkare-admin-sync.env.XXXXXX)"
+trap 'rm -f -- "${SYNC_ENV_TMP:-}"' EXIT
+printf '%s\n' \
+  "VPS_SYNC_KEY=$SYNC_KEY" \
+  "HAMKARE_SYNC_URL=$SYNC_URL" \
+  "HAMKARE_TELEGRAM_ENV=$TG_ENV" \
+  "HAMKARE_BALE_ENV=$BALE_ENV" > "$SYNC_ENV_TMP"
+chmod 0600 "$SYNC_ENV_TMP"
+chown root:root "$SYNC_ENV_TMP"
+python3 - "$SYNC_ENV_TMP" <<'PY'
+import os
+import sys
+with open(sys.argv[1], "rb") as handle:
+    os.fsync(handle.fileno())
+PY
+mv -f -- "$SYNC_ENV_TMP" "$SYNC_ENV"
+python3 - "$(dirname "$SYNC_ENV")" <<'PY'
+import os
+import sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
+SYNC_ENV_TMP=''
+trap - EXIT
 
 # Fail safely before retiring the old writer. This call also proves that the
 # deployed Function, D1 binding, encryption key and VPS_SYNC_KEY agree.
@@ -324,6 +346,6 @@ systemctl is-active --quiet hamkare-admin-sync.timer
 
 echo '✅ source of truth: Cloudflare D1'
 echo '✅ پنل واحد: https://adlisho.online/admin'
-echo '✅ دانلود ثابت: https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
+echo '✅ دانلود پویا از D1: https://adlisho.online/download'
 echo "✅ بکاپ مسیر قدیمی: $BACKUP_DIR"
 echo 'وضعیت: systemctl status hamkare-admin-sync.timer --no-pager'

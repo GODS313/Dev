@@ -9,6 +9,14 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 
 const RELEASE_URL = 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk';
 
+function validDownloadUrl(value) {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password;
+  } catch { return false; }
+}
+
 const bytesToBase64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
 async function encryptionKey(env) {
@@ -63,7 +71,7 @@ export async function onRequest({ request, env }) {
       bale_token_set: Boolean(current.bale_token),
       telegram_chat_id: current.telegram_chat_id || '',
       bale_chat_id: current.bale_chat_id || '',
-      download_source: RELEASE_URL,
+      download_source: current.download_source || RELEASE_URL,
       revision: current.config_revision || '',
     });
   }
@@ -87,10 +95,11 @@ export async function onRequest({ request, env }) {
     if (!/^[A-Za-z0-9_:.-]{20,256}$/.test(value)) return json({ error: 'توکن نامعتبر' }, 400);
     updates.push([name, await encrypt(value, env), 1]);
   }
-  if (Object.hasOwn(body, 'download_source') && String(body.download_source).trim() !== RELEASE_URL) {
-    return json({ error: 'لینک دانلود فقط GitHub Release رسمی است' }, 400);
+  if (Object.hasOwn(body, 'download_source')) {
+    const value = String(body.download_source).trim();
+    if (!validDownloadUrl(value)) return json({ error: 'لینک دانلود HTTPS معتبر نیست' }, 400);
+    updates.push(['download_source', value, 0]);
   }
-  updates.push(['download_source', RELEASE_URL, 0]);
   if (!updates.length) return json({ ok: true, changed: false });
 
   const revision = crypto.randomUUID();

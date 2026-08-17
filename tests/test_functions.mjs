@@ -72,10 +72,14 @@ test('download gateway always redirects to the official GitHub Release', async (
   assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
 });
 
-test('download gateway ignores stale D1 download settings', async () => {
+test('download gateway reads the current D1 download source', async () => {
   const { onRequestGet } = await importSource('functions/download.js');
-  const response = await onRequestGet({ env: { DB: { stale: true } } });
-  assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
+  const statement = {
+    bind() { return statement; },
+    async all() { return { results: [{ value: 'https://cdn.example/hamkare.apk' }] }; },
+  };
+  const response = await onRequestGet({ env: { DB: { prepare() { return statement; } } } });
+  assert.equal(response.headers.get('Location'), 'https://cdn.example/hamkare.apk');
 });
 
 test('admin config persists one revision with one atomic D1 batch', async () => {

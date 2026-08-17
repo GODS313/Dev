@@ -1,6 +1,7 @@
 name: Release checks
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
@@ -31,6 +32,8 @@ jobs:
             scripts/publish-hamkare-apk.sh
       - name: Python tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Production consistency guard
+        run: python3 -m unittest discover -s tests/static -p 'test_*.py'
       - name: Node tests
         run: node --test tests/test_functions.mjs
       - name: JSON syntax
