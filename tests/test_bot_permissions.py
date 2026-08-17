@@ -49,7 +49,7 @@ class PermissionTests(unittest.TestCase):
                 token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
                 log_chat_id="-1001234567890",
                 admin_ids=self.admins,
-                download_url="https://seskia.online/est/download",
+                download_url="https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
                 site_url="https://adlisho.online",
                 support_url="https://adlisho.online/contact.html",
                 privacy_url="https://adlisho.online/privacy.html",
@@ -85,6 +85,31 @@ class PermissionTests(unittest.TestCase):
             self.assertIn("admin_upload", panel_callbacks)
             self.assertIn("admin_rollback", panel_callbacks)
 
+    def test_bale_download_button_uses_the_official_github_release(self):
+        expected = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk"
+        with tempfile.TemporaryDirectory() as directory:
+            config = BOT.Config(
+                platform="bale",
+                token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
+                log_chat_id="-1001234567890",
+                admin_ids=self.admins,
+                download_url=expected,
+                site_url="https://adlisho.online",
+                support_url="https://adlisho.online/contact.html",
+                privacy_url="https://adlisho.online/privacy.html",
+                tracking_url="https://adlisho.online/result.html",
+                brand_name="همکاره",
+                database_path=Path(directory) / "bale.sqlite3",
+                apk_upload_enabled=False,
+                apk_deploy_path=None,
+                max_apk_bytes=20 * 1024 * 1024,
+            )
+            bot = BOT.Bot(config)
+            sent = []
+            bot.send = lambda chat_id, text, keyboard=None: sent.append((chat_id, text, keyboard))
+            bot.download("10001", "10001")
+            self.assertEqual(sent[-1][2][0][0]["url"], expected)
+
 
 class ValidationTests(unittest.TestCase):
     @staticmethod
@@ -94,7 +119,7 @@ class ValidationTests(unittest.TestCase):
             token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             log_chat_id="-1001234567890",
             admin_ids=frozenset({"10001"}),
-            download_url="https://seskia.online/est/download",
+            download_url="https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
             site_url="https://adlisho.online",
             support_url="https://adlisho.online/contact.html",
             privacy_url="https://adlisho.online/privacy.html",
@@ -336,7 +361,7 @@ class ValidationTests(unittest.TestCase):
             "BOT_TOKEN": "1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             "LOG_CHAT_ID": "-1001234567890",
             "ADMIN_IDS": "10001",
-            "DOWNLOAD_URL": "https://seskia.online/est/download",
+            "DOWNLOAD_URL": "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk",
             "SITE_URL": "https://adlisho.online",
             "SUPPORT_URL": "https://adlisho.online/contact.html",
             "PRIVACY_URL": "https://adlisho.online/privacy.html",

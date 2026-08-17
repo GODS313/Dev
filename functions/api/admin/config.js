@@ -7,6 +7,8 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   },
 });
 
+const RELEASE_URL = 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk';
+
 const bytesToBase64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
 async function encryptionKey(env) {
@@ -29,24 +31,6 @@ function constantTimeEqual(left, right) {
   let mismatch = 0;
   for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
   return mismatch === 0;
-}
-
-function allowedHosts(env) {
-  const hosts = new Set(['seskia.online', 'www.seskia.online']);
-  for (const item of String(env.APK_ALLOWED_HOSTS || '').split(',')) {
-    const host = item.trim().toLowerCase();
-    if (/^[a-z0-9.-]+$/.test(host)) hosts.add(host);
-  }
-  return hosts;
-}
-
-function validDownloadSource(value, env) {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && allowedHosts(env).has(url.hostname.toLowerCase());
-  } catch {
-    return false;
-  }
 }
 
 async function ensureTable(db) {
@@ -79,7 +63,7 @@ export async function onRequest({ request, env }) {
       bale_token_set: Boolean(current.bale_token),
       telegram_chat_id: current.telegram_chat_id || '',
       bale_chat_id: current.bale_chat_id || '',
-      download_source: current.download_source || current.download_url || '',
+      download_source: RELEASE_URL,
       revision: current.config_revision || '',
     });
   }
@@ -88,9 +72,6 @@ export async function onRequest({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'داده نامعتبر' }, 400); }
   if (!body || Array.isArray(body) || typeof body !== 'object') return json({ error: 'داده نامعتبر' }, 400);
-
-  // Accept the old field once during migration, but persist only download_source.
-  if (!Object.hasOwn(body, 'download_source') && Object.hasOwn(body, 'download_url')) body.download_source = body.download_url;
 
   const updates = [];
   for (const name of ['telegram_chat_id', 'bale_chat_id']) {
@@ -106,11 +87,10 @@ export async function onRequest({ request, env }) {
     if (!/^[A-Za-z0-9_:.-]{20,256}$/.test(value)) return json({ error: 'توکن نامعتبر' }, 400);
     updates.push([name, await encrypt(value, env), 1]);
   }
-  if (Object.hasOwn(body, 'download_source')) {
-    const value = String(body.download_source).trim();
-    if (!validDownloadSource(value, env)) return json({ error: 'منبع APK مجاز نیست' }, 400);
-    updates.push(['download_source', value, 0]);
+  if (Object.hasOwn(body, 'download_source') && String(body.download_source).trim() !== RELEASE_URL) {
+    return json({ error: 'لینک دانلود فقط GitHub Release رسمی است' }, 400);
   }
+  updates.push(['download_source', RELEASE_URL, 0]);
   if (!updates.length) return json({ ok: true, changed: false });
 
   const revision = crypto.randomUUID();

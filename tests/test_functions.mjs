@@ -65,54 +65,17 @@ test('registration rejects an oversized streamed body before JSON parsing', asyn
   assert.equal(response.status, 413);
 });
 
-test('download gateway rejects a redirect before contacting a disallowed host', async () => {
+test('download gateway always redirects to the official GitHub Release', async () => {
   const { onRequestGet } = await importSource('functions/download.js');
-  const originalFetch = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url) => {
-    calls.push(String(url));
-    return new Response(null, {
-      status: 302,
-      headers: { Location: 'http://127.0.0.1/internal' },
-    });
-  };
-  try {
-    const response = await onRequestGet({ env: {} });
-    assert.equal(response.status, 503);
-    assert.deepEqual(calls, ['https://seskia.online/est/download']);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  const response = await onRequestGet({ env: {} });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
 });
 
-test('download gateway follows only allowlisted redirects and requires a bounded body', async () => {
+test('download gateway ignores stale D1 download settings', async () => {
   const { onRequestGet } = await importSource('functions/download.js');
-  const originalFetch = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url) => {
-    calls.push(String(url));
-    if (calls.length === 1) {
-      return new Response(null, { status: 302, headers: { Location: '/files/app.apk' } });
-    }
-    return new Response(new Uint8Array([80, 75, 3, 4]), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.android.package-archive',
-        'Content-Length': '4',
-      },
-    });
-  };
-  try {
-    const response = await onRequestGet({ env: {} });
-    assert.equal(response.status, 200);
-    assert.deepEqual(calls, [
-      'https://seskia.online/est/download',
-      'https://seskia.online/files/app.apk',
-    ]);
-    assert.equal(response.headers.get('Content-Disposition'), 'attachment; filename="hamkare.apk"');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  const response = await onRequestGet({ env: { DB: { stale: true } } });
+  assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
 });
 
 test('admin config persists one revision with one atomic D1 batch', async () => {
@@ -139,7 +102,7 @@ test('admin config persists one revision with one atomic D1 batch', async () => 
     headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin-secret' },
     body: JSON.stringify({
       telegram_chat_id: '-1001234567890',
-      download_source: 'https://seskia.online/est/download',
+      download_source: 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk',
     }),
   });
   const response = await onRequest({
@@ -153,34 +116,6 @@ test('admin config persists one revision with one atomic D1 batch', async () => 
   assert.equal(response.status, 200);
   assert.equal(batchCalls, 1);
   assert.equal(batchSize, 3); // two settings plus config_revision
-});
-
-test('download gateway reads the canonical D1 download_source first', async () => {
-  const { onRequestGet } = await importSource('functions/download.js');
-  const originalFetch = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url) => {
-    calls.push(String(url));
-    return new Response(new Uint8Array([80, 75, 3, 4]), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.android.package-archive',
-        'Content-Length': '4',
-      },
-    });
-  };
-  const db = {
-    prepare() {
-      return { async all() { return { results: [{ key: 'download_source', value: 'https://seskia.online/new.apk' }] }; } };
-    },
-  };
-  try {
-    const response = await onRequestGet({ env: { DB: db } });
-    assert.equal(response.status, 200);
-    assert.deepEqual(calls, ['https://seskia.online/new.apk']);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
 });
 
 test('VPS sync endpoint requires its independent secret', async () => {

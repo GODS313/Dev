@@ -7,6 +7,8 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   },
 });
 
+const RELEASE_URL = 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk';
+
 const base64ToBytes = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 
 function constantTimeEqual(left, right) {
@@ -46,8 +48,8 @@ export async function onRequestGet({ request, env }) {
     };
     return json({
       revision: current.config_revision || '',
-      canonical_download_url: 'https://adlisho.online/download.php',
-      download_source: current.download_source || current.download_url || 'https://seskia.online/est/download',
+      canonical_download_url: RELEASE_URL,
+      download_source: RELEASE_URL,
       telegram: await platform('telegram'),
       bale: await platform('bale'),
     });

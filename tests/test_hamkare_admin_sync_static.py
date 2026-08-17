@@ -28,9 +28,11 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         self.assertIn('flock(lock, fcntl.LOCK_EX)', INSTALLER)
 
     def test_download_uses_the_same_d1_record(self):
-        self.assertIn("'download_source','download_url'", DOWNLOAD)
-        self.assertIn("download_source: current.download_source", SYNC_API)
-        self.assertIn("canonical_download_url: 'https://adlisho.online/download.php'", SYNC_API)
+        expected = 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
+        self.assertIn(expected, DOWNLOAD)
+        self.assertIn('download_source: RELEASE_URL', SYNC_API)
+        self.assertIn('canonical_download_url: RELEASE_URL', SYNC_API)
+        self.assertIn(expected, INSTALLER)
 
     def test_legacy_vps_panel_is_redirect_only(self):
         self.assertIn("Location: https://adlisho.online/admin", INSTALLER)

@@ -1,4 +1,4 @@
-const DOWNLOAD_URL = "https://seskia.online/est/download";
+const DOWNLOAD_URL = "https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk";
 const shell = document.querySelector(".site-shell");
 const themeButtons = [...document.querySelectorAll("[data-select-theme]")];
 const preferredTheme = new URLSearchParams(window.location.search).get("theme");

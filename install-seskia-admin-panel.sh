@@ -289,7 +289,7 @@ status_code="$(curl -sS --connect-timeout 10 --max-time 30 --resolve seskia.onli
 [[ "$status_code" == 200 ]] || { echo "پنل HTTP $status_code برگرداند؛ بکاپ: $SNAPSHOT" >&2; exit 1; }
 webhook_status="$(curl -sS --connect-timeout 10 --max-time 30 --resolve seskia.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST --data '{}' 'https://seskia.online/telegram.php?secret=invalid-install-probe')"
 [[ "$webhook_status" == 401 || "$webhook_status" == 403 ]] || { echo "webhook درخواست بدون secret معتبر را با HTTP $webhook_status رد نکرد." >&2; exit 1; }
-download_headers="$(curl -sS --connect-timeout 10 --max-time 300 --resolve seskia.online:443:127.0.0.1 -D - -o /dev/null 'https://seskia.online/est/download?install-probe=1')"
+download_headers="$(curl -sSL --connect-timeout 10 --max-time 300 -D - -o /dev/null 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk')"
 grep -qi '^Content-Disposition:.*hamkare\.apk' <<<"$download_headers" || { echo 'نام وایت‌لیبل hamkare.apk در لینک عمومی فعال نشد.' >&2; exit 1; }
 grep -qi '^Cache-Control: *public' <<<"$download_headers" || { echo 'cache عمومی لینک دانلود فعال نشد.' >&2; exit 1; }
 unset download_headers

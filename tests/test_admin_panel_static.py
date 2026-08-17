@@ -52,7 +52,7 @@ class AdminPanelStaticTests(unittest.TestCase):
 
     def test_existing_webhook_and_canonical_download_are_reused(self):
         self.assertIn("https://seskia.online/telegram.php", LIB)
-        self.assertIn("https://seskia.online/est/download", LIB)
+        self.assertIn("https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk", LIB)
         self.assertNotIn("getUpdates", LIB)
         self.assertNotIn("deleteWebhook', ['drop_pending_updates' => 'true'", LIB)
         self.assertIn("panel_write_config($oldConfig)", LIB)
