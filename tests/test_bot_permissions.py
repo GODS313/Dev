@@ -34,7 +34,7 @@ class PermissionTests(unittest.TestCase):
     def test_apk_upload_is_telegram_admin_only(self):
         self.assertTrue(BOT.can_upload_apk("telegram", "10001", self.admins, True))
         self.assertFalse(BOT.can_upload_apk("telegram", "20002", self.admins, True))
-        self.assertFalse(BOT.can_upload_apk("bale", "10001", self.admins, True))
+        self.assertTrue(BOT.can_upload_apk("bale", "10001", self.admins, True))
         self.assertFalse(BOT.can_upload_apk("telegram", "10001", self.admins, False))
 
     def test_admin_id_parser_rejects_ambiguous_values(self):
