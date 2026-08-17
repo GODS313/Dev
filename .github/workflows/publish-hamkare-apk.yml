@@ -1,0 +1,72 @@
+name: Publish approved Hamkare APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: Public HTTPS URL of the approved APK (do not use a secret URL)
+        required: true
+        type: string
+      sha256:
+        description: Expected SHA-256 digest (64 hexadecimal characters)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-hamkare-apk
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the reviewed publisher
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Download and validate the approved APK
+        env:
+          SOURCE_URL: ${{ inputs.source_url }}
+          EXPECTED_SHA256: ${{ inputs.sha256 }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_hamkare_apk.py fetch \
+            --url "$SOURCE_URL" \
+            --sha256 "$EXPECTED_SHA256" \
+            --output hamkare.apk
+
+      - name: Publish hamkare.apk as the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA256: ${{ inputs.sha256 }}
+        run: |
+          set -euo pipefail
+          tag="hamkare-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          size="$(stat -c '%s' hamkare.apk)"
+          printf '%s\n' \
+            'Approved Hamkare Android release.' \
+            '' \
+            "SHA-256: ${EXPECTED_SHA256,,}" \
+            "Size: ${size} bytes" \
+            "Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > release-notes.md
+
+          cleanup_failed_release() {
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1 || true
+          }
+          trap cleanup_failed_release ERR
+          gh release create "$tag" \
+            'hamkare.apk#hamkare.apk' \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'Hamkare Android' \
+            --notes-file release-notes.md \
+            --latest
+          trap - ERR
+
