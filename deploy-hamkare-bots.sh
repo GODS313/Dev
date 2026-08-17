@@ -10,10 +10,119 @@ fi
 command -v realpath >/dev/null || { echo 'realpath در دسترس نیست.' >&2; exit 1; }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
+
+render_service_unit() {
+  local platform="$1"
+  cat <<EOF
+[Unit]
+Description=Hamkare $platform recruitment bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=$APP
+EnvironmentFile=$APP/$platform.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -I $APP/bot.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=$APP
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+repair_mode() {
+  [[ "$APP" =~ ^/(opt|srv)/[A-Za-z0-9._/-]+$ ]] || { echo 'HAMKARE_APP_DIR باید زیر /opt یا /srv باشد.' >&2; return 1; }
+  APP="$(realpath -m -- "$APP")"
+  [[ "$APP" == /opt/* || "$APP" == /srv/* ]] || { echo 'مسیر نهایی نامعتبر است.' >&2; return 1; }
+  [[ -d "$APP" && -f "$APP/bot.py" ]] || { echo "نصب موجود پیدا نشد: $APP/bot.py" >&2; return 1; }
+
+  local platform env_file key value unit desired database_path
+  local shared_changed=0 env_errors=0
+  local -a restart_services=()
+  local -a required_keys=(PLATFORM BOT_TOKEN LOG_CHAT_ID ADMIN_IDS DOWNLOAD_URL SITE_URL SUPPORT_URL PRIVACY_URL TRACKING_URL DATABASE_PATH)
+
+  if [[ "$(stat -c '%U:%G:%a' "$APP")" != root:root:700 ]]; then chown root:root "$APP"; chmod 0700 "$APP"; shared_changed=1; fi
+  if [[ "$(stat -c '%U:%G:%a' "$APP/bot.py")" != root:root:750 ]]; then chown root:root "$APP/bot.py"; chmod 0750 "$APP/bot.py"; shared_changed=1; fi
+
+  for platform in telegram bale; do
+    env_file="$APP/$platform.env"
+    if [[ ! -f "$env_file" ]]; then echo "❌ env موجود نیست؛ secret ساخته نشد: $env_file" >&2; env_errors=1; continue; fi
+    if [[ "$(stat -c '%U:%G:%a' "$env_file")" != root:root:600 ]]; then chown root:root "$env_file"; chmod 0600 "$env_file"; shared_changed=1; fi
+    for key in "${required_keys[@]}"; do
+      value="$(sed -n "s/^${key}=//p" "$env_file" | tail -n 1)"
+      if [[ -z "$value" ]]; then echo "❌ $env_file: مقدار $key ناقص است؛ فایل تغییر نکرد." >&2; env_errors=1; fi
+    done
+    value="$(sed -n 's/^PLATFORM=//p' "$env_file" | tail -n 1)"
+    if [[ "$value" != "$platform" ]]; then echo "❌ $env_file: PLATFORM باید $platform باشد؛ فایل تغییر نکرد." >&2; env_errors=1; fi
+  done
+  (( env_errors == 0 )) || { echo 'Repair متوقف شد؛ token/chat ID تغییر نکرد.' >&2; return 2; }
+
+  database_path="$(sed -n 's/^DATABASE_PATH=//p' "$APP/telegram.env" | tail -n 1)"
+  [[ "$database_path" == "$APP/"* ]] || { echo "❌ DATABASE_PATH باید داخل $APP باشد." >&2; return 2; }
+  value="$(sed -n 's/^DATABASE_PATH=//p' "$APP/bale.env" | tail -n 1)"
+  [[ "$value" == "$database_path" ]] || { echo '❌ DATABASE_PATH دو سرویس یکسان نیست.' >&2; return 2; }
+  install -d -o root -g root -m 0700 "$(dirname -- "$database_path")"
+  for value in "$database_path" "$database_path-wal" "$database_path-shm" "$database_path-journal"; do
+    if [[ -e "$value" && "$(stat -c '%U:%G:%a' "$value")" != root:root:600 ]]; then chown root:root "$value"; chmod 0600 "$value"; shared_changed=1; fi
+  done
+
+  for platform in telegram bale; do
+    unit="/etc/systemd/system/hamkare-$platform.service"; desired="$(mktemp)"
+    render_service_unit "$platform" > "$desired"
+    if [[ ! -f "$unit" ]] || ! cmp -s "$desired" "$unit"; then install -o root -g root -m 0644 "$desired" "$unit"; restart_services+=("hamkare-$platform.service"); fi
+    rm -f "$desired"
+  done
+  python3 -m py_compile "$APP/bot.py"
+  find "$APP" -maxdepth 1 -type d -name __pycache__ -exec chown -R root:root {} + -exec chmod 0700 {} +
+  systemctl daemon-reload
+
+  for platform in telegram bale; do
+    unit="hamkare-$platform.service"
+    if (( shared_changed )) || ! systemctl is-active --quiet "$unit"; then restart_services+=("$unit"); fi
+  done
+  local -A seen=()
+  for unit in "${restart_services[@]}"; do
+    [[ -z "${seen[$unit]:-}" ]] || continue; seen[$unit]=1
+    systemctl enable "$unit" >/dev/null; systemctl restart "$unit"
+  done
+  for platform in telegram bale; do
+    unit="hamkare-$platform.service"
+    systemctl is-active --quiet "$unit" || { echo "❌ health-check ناموفق: $unit" >&2; systemctl --no-pager --full status "$unit" >&2 || true; return 1; }
+  done
+  echo '✅ Repair امن کامل شد؛ env و secretها بازنویسی نشدند.'
+}
+
+if [[ "${1:-}" == --repair ]]; then repair_mode; exit $?; fi
+
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 [[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
-
-APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 BRAND_NAME="${BRAND_NAME:-همکاره}"
 SITE_URL="${SITE_URL:-https://adlisho.online}"
 DOWNLOAD_URL='https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
@@ -113,46 +222,7 @@ EOF
 chmod 600 "$APP"/*.env
 
 for platform in telegram bale; do
-  read_write_paths="$APP"
-  cat > "/etc/systemd/system/hamkare-$platform.service" <<EOF
-[Unit]
-Description=Hamkare $platform recruitment bot
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=$APP
-EnvironmentFile=$APP/$platform.env
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 -I $APP/bot.py
-Restart=always
-RestartSec=3
-TimeoutStopSec=20
-UMask=0077
-NoNewPrivileges=true
-PrivateTmp=true
-PrivateDevices=true
-ProtectSystem=strict
-ProtectHome=true
-ProtectHostname=true
-ProtectClock=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
-ProtectControlGroups=true
-RestrictSUIDSGID=true
-RestrictRealtime=true
-LockPersonality=true
-CapabilityBoundingSet=
-AmbientCapabilities=
-SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=$read_write_paths
-
-[Install]
-WantedBy=multi-user.target
-EOF
+  render_service_unit "$platform" > "/etc/systemd/system/hamkare-$platform.service"
 done
 
 python3 -m py_compile "$APP/bot.py"
