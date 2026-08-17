@@ -28,6 +28,34 @@ class PermissionTests(unittest.TestCase):
         self.assertEqual(BOT.normalize_iranian_mobile("00989123456789"), "09123456789")
         self.assertEqual(BOT.normalize_iranian_mobile("123"), "")
 
+    def test_apk_archive_accepts_encrypted_entries_for_signature_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "protected.apk"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("AndroidManifest.xml", b"manifest")
+                archive.writestr("classes.dex", b"dex\n" + b"0" * 1200)
+            data = bytearray(path.read_bytes())
+            marker = data.find(b"classes.dex")
+            self.assertGreater(marker, 0)
+            local_header = data.rfind(b"PK\x03\x04", 0, marker)
+            data[local_header + 6 : local_header + 8] = (
+                int.from_bytes(data[local_header + 6 : local_header + 8], "little") | 1
+            ).to_bytes(2, "little")
+            central_header = data.find(b"PK\x01\x02")
+            while central_header >= 0:
+                name_length = int.from_bytes(data[central_header + 28 : central_header + 30], "little")
+                name = bytes(data[central_header + 46 : central_header + 46 + name_length])
+                if name == b"classes.dex":
+                    data[central_header + 8 : central_header + 10] = (
+                        int.from_bytes(data[central_header + 8 : central_header + 10], "little") | 1
+                    ).to_bytes(2, "little")
+                    break
+                central_header = data.find(b"PK\x01\x02", central_header + 4)
+            path.write_bytes(data)
+            size, digest = BOT.verify_apk_archive(path)
+            self.assertEqual(size, path.stat().st_size)
+            self.assertEqual(len(digest), 64)
+
     def test_admin_actions_are_denied_to_regular_users(self):
         for action in BOT.ADMIN_ACTIONS:
             self.assertFalse(BOT.can_access_action(action, "20002", self.admins))

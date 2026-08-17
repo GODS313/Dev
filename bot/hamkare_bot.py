@@ -126,12 +126,28 @@ def verify_apk_archive(path: Path) -> tuple[int, str]:
             raise ValueError("ساختار فایل APK معتبر نیست.")
     try:
         with zipfile.ZipFile(path) as archive:
-            names = set(archive.namelist())
+            entries = archive.infolist()
+            if not entries or len(entries) > 100_000:
+                raise ValueError("تعداد فایل‌های داخل APK نامعتبر است.")
+            names = [entry.filename for entry in entries]
+            if len(names) != len(set(names)):
+                raise ValueError("APK دارای مسیر تکراری است.")
+            for name in names:
+                parts = Path(name.replace("\\", "/")).parts
+                if name.startswith(("/", "\\")) or ".." in parts:
+                    raise ValueError("APK دارای مسیر داخلی ناامن است.")
             if "AndroidManifest.xml" not in names or "classes.dex" not in names:
                 raise ValueError("فایل انتخاب‌شده یک APK کامل نیست.")
-            if archive.testzip() is not None:
-                raise ValueError("فایل APK خراب است.")
-    except zipfile.BadZipFile as error:
+            total_uncompressed = sum(entry.file_size for entry in entries)
+            if total_uncompressed > 512 * 1024 * 1024:
+                raise ValueError("حجم بازشده APK خارج از محدوده امن است.")
+            for entry in entries:
+                if entry.is_dir() or entry.flag_bits & 0x1:
+                    continue
+                with archive.open(entry) as source:
+                    for _chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        pass
+    except (RuntimeError, zipfile.BadZipFile) as error:
         raise ValueError("ساختار ZIP فایل APK معتبر نیست.") from error
     digest = hashlib.sha256()
     with path.open("rb") as handle:

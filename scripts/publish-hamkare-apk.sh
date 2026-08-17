@@ -14,7 +14,7 @@ AOSP_TEST_CERT=a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc
 [[ "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'SHA-256 must contain exactly 64 lowercase hexadecimal characters.' >&2; exit 1; }
 [[ -n "${GH_TOKEN:-}" ]] || { echo 'GH_TOKEN is required.' >&2; exit 1; }
 
-for command_name in apksigner curl gh python3 sha256sum stat timeout unzip; do
+for command_name in apksigner curl gh python3 sha256sum stat timeout; do
   command -v "$command_name" >/dev/null || { echo "Missing command: $command_name" >&2; exit 1; }
 done
 
@@ -67,10 +67,40 @@ candidate_size="$(stat -c %s "$CANDIDATE")"
   echo 'APK size is outside the approved Telegram limit.' >&2
   exit 1
 }
-[[ "$(od -An -tx1 -N4 "$CANDIDATE" | tr -d ' \n')" == 504b0304 ]] || { echo 'APK ZIP header is invalid.' >&2; exit 1; }
-timeout 120 unzip -tqq "$CANDIDATE"
-unzip -Z1 "$CANDIDATE" | grep -Fxq AndroidManifest.xml || { echo 'AndroidManifest.xml is missing.' >&2; exit 1; }
-unzip -Z1 "$CANDIDATE" | grep -Fxq classes.dex || { echo 'classes.dex is missing.' >&2; exit 1; }
+python3 - "$CANDIDATE" <<'PY'
+import pathlib
+import sys
+import zipfile
+
+path = pathlib.Path(sys.argv[1])
+with path.open("rb") as source:
+    if source.read(4) != b"PK\x03\x04":
+        raise SystemExit("APK ZIP header is invalid.")
+try:
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+        if not entries or len(entries) > 100_000:
+            raise SystemExit("APK entry count is outside the safe range.")
+        names = [entry.filename for entry in entries]
+        if len(names) != len(set(names)):
+            raise SystemExit("APK contains duplicate paths.")
+        for name in names:
+            parts = pathlib.PurePosixPath(name.replace("\\", "/")).parts
+            if name.startswith(("/", "\\")) or ".." in parts:
+                raise SystemExit("APK contains an unsafe internal path.")
+        if "AndroidManifest.xml" not in names or "classes.dex" not in names:
+            raise SystemExit("Required APK entries are missing.")
+        if sum(entry.file_size for entry in entries) > 512 * 1024 * 1024:
+            raise SystemExit("APK expanded size is outside the safe range.")
+        for entry in entries:
+            if entry.is_dir() or entry.flag_bits & 0x1:
+                continue
+            with archive.open(entry) as source:
+                for _chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    pass
+except (RuntimeError, zipfile.BadZipFile) as error:
+    raise SystemExit(f"APK ZIP structure is invalid: {error}") from error
+PY
 
 actual_sha256="$(sha256sum "$CANDIDATE" | awk '{print $1}')"
 [[ "$actual_sha256" == "$EXPECTED_SHA256" ]] || { echo 'Downloaded APK SHA-256 does not match the approved value.' >&2; exit 1; }
