@@ -48,10 +48,12 @@ class ApkReleaseBridgeStaticTests(unittest.TestCase):
         self.assertIn('RELEASE_VERIFIED=1', PUBLISHER)
         self.assertRegex(PUBLISHER, re.compile(r'sha256sum "\$PUBLIC_COPY".*EXPECTED_SHA256'))
 
-    def test_activation_changes_only_telegram_and_keeps_secret_out_of_source(self):
-        self.assertIn('TG_ENV="$APP_DIR/telegram.env"', ENABLE)
-        self.assertNotIn('BALE_ENV=', ENABLE)
-        self.assertNotIn('"$APP_DIR/bale.env"', ENABLE)
+    def test_activation_supports_one_selected_platform_and_keeps_secret_out_of_source(self):
+        self.assertIn('PLATFORM=telegram', ENABLE)
+        self.assertIn('"$PLATFORM" == telegram || "$PLATFORM" == bale', ENABLE)
+        self.assertIn('ENV_FILE="$APP_DIR/$PLATFORM.env"', ENABLE)
+        self.assertIn('SERVICE="hamkare-$PLATFORM.service"', ENABLE)
+        self.assertIn('/run/lock/hamkare-apk-release.lock', ENABLE)
         self.assertIn('"APK_UPLOAD_ENABLED": "true"', ENABLE)
         self.assertIn('"PUBLIC_VERIFY_ENABLED": "true"', ENABLE)
         self.assertIn('"GITHUB_WORKFLOW": "publish-hamkare-apk.yml"', ENABLE)
