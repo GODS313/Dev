@@ -9,7 +9,7 @@ if ! command -v python3 >/dev/null; then
 fi
 command -v realpath >/dev/null || { echo 'realpath در دسترس نیست.' >&2; exit 1; }
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
 APP="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 
 render_service_unit() {
