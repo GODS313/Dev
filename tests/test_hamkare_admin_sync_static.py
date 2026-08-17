@@ -8,6 +8,8 @@ INSTALLER = (ROOT / 'install-hamkare-admin-vps.sh').read_text(encoding='utf-8')
 CONFIG_API = (ROOT / 'functions' / 'api' / 'admin' / 'config.js').read_text(encoding='utf-8')
 SYNC_API = (ROOT / 'functions' / 'api' / 'admin' / 'sync.js').read_text(encoding='utf-8')
 DOWNLOAD = (ROOT / 'functions' / 'download.js').read_text(encoding='utf-8')
+RELEASE_PUBLISHER = (ROOT / 'scripts' / 'publish-hamkare-apk.sh').read_text(encoding='utf-8')
+TELEGRAM_RELEASE_ENABLE = (ROOT / 'enable-hamkare-telegram-apk-release.sh').read_text(encoding='utf-8')
 PRODUCTION_DOCS = {
     'README.md': (ROOT / 'README.md').read_text(encoding='utf-8'),
     'DEPLOYMENT.md': (ROOT / 'DEPLOYMENT.md').read_text(encoding='utf-8'),
@@ -48,6 +50,8 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
             'functions/api/admin/sync.js': SYNC_API,
             'install-hamkare-admin-vps.sh': INSTALLER,
             'functions/download.js': DOWNLOAD,
+            'scripts/publish-hamkare-apk.sh': RELEASE_PUBLISHER,
+            'enable-hamkare-telegram-apk-release.sh': TELEGRAM_RELEASE_ENABLE,
             **PRODUCTION_DOCS,
         }
         urls_by_source = {

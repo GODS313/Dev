@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -158,6 +159,52 @@ class ValidationTests(unittest.TestCase):
             "/relative",
         ):
             self.assertFalse(BOT.valid_https_url(value))
+
+    def test_release_source_is_sha_bound_and_host_restricted(self):
+        digest = "a" * 64
+        self.assertEqual(
+            BOT.release_source_url(
+                "https://seskia.online/download.php?src=github-release", digest
+            ),
+            "https://seskia.online/download.php?src=github-release&sha256=" + digest,
+        )
+        for value in (
+            "https://evil.example/download.php?src=github-release",
+            "https://seskia.online/other.php?src=github-release",
+            "https://seskia.online/download.php?src=other",
+            "https://user@seskia.online/download.php?src=github-release",
+        ):
+            with self.assertRaises(ValueError):
+                BOT.release_source_url(value, digest)
+        with self.assertRaises(ValueError):
+            BOT.release_source_url(
+                "https://seskia.online/download.php?src=github-release", "not-a-digest"
+            )
+
+    def test_github_dispatch_contains_only_the_approved_contract(self):
+        response = mock.MagicMock()
+        response.status = 204
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        with mock.patch.object(BOT.urllib.request, "urlopen", return_value=response) as request_call:
+            BOT.dispatch_release_workflow(
+                "x" * 40,
+                "GODS313/Dev",
+                "publish-hamkare-apk.yml",
+                "https://seskia.online/download.php?src=github-release",
+                "b" * 64,
+            )
+        request = request_call.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.com/repos/GODS313/Dev/actions/workflows/"
+            "publish-hamkare-apk.yml/dispatches",
+        )
+        payload = json.loads(request.data)
+        self.assertEqual(payload["ref"], "main")
+        self.assertEqual(payload["inputs"]["sha256"], "b" * 64)
+        self.assertIn("sha256=" + "b" * 64, payload["inputs"]["source_url"])
+        self.assertNotIn("x" * 40, request.data.decode())
 
     def test_known_valid_and_invalid_national_ids(self):
         self.assertTrue(BOT.valid_national_id("0013541579"))

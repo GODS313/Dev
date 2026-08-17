@@ -43,6 +43,16 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 
 فایل APK فقط با نام دقیق `hamkare.apk` در GitHub Release پروژه `GODS313/Dev` منتشر می‌شود. لینک `releases/latest/download` بدون تغییر باقی می‌ماند و همیشه asset آخرین Release را ارائه می‌کند. تنظیمات ربات‌های استخدامی فقط از پنل production همکاره در `/admin` مدیریت می‌شوند و توکن‌ها تغییری نمی‌کنند.
 
+workflow دائمی `.github/workflows/publish-hamkare-apk.yml` ورودی‌های `source_url` و `sha256` را می‌گیرد، فقط منبع HTTPS تأییدشده Seskia را قبول می‌کند و قبل از انتشار اندازه، ساختار ZIP/APK، Manifest، DEX، SHA-256 و تداوم گواهی امضای نسخه فعلی GitHub را بررسی می‌کند. Release ابتدا Draft است و فقط پس از آپلود asset با نام `hamkare.apk` به latest تبدیل می‌شود؛ تأیید ناموفق باعث حذف خودکار Release تازه و حفظ نسخه سالم قبلی می‌شود.
+
+برای فعال‌کردن منوی آپلود فقط در بات تلگرام، یک fine-grained token مخصوص همین مخزن با دسترسی `Actions: Read and write` بسازید و دستور زیر را روی VPS اجرا کنید. توکن به‌شکل مخفی پرسیده و فقط در `telegram.env` با دسترسی محدود ذخیره می‌شود؛ `bale.env` تغییر نمی‌کند.
+
+```bash
+( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-apk-release.sh" )
+```
+
+پس از فعال‌سازی، مدیر مجاز در بات تلگرام از «پنل مدیریت ← تعویض فایل APK» فایل را به‌شکل Document می‌فرستد. بات پس از اعتبارسنجی و بکاپ، workflow را با SHA-256 همان فایل اجرا و تا تطبیق دانلود عمومی GitHub صبر می‌کند. دکمه بله، تلگرام و سایت بدون تغییر لینک، نسخه جدید GitHub را دریافت می‌کنند.
+
 نصب بات‌ها:
 
 ```bash

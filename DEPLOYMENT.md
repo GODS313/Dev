@@ -69,7 +69,7 @@ sudo bash deploy-hamkare-bots.sh
 - شناسه عددی مدیران تلگرام و بله
 - نام برند و URLها از env یا مقادیر پیش‌فرض امن
 
-کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود و تعویض APK در هر دو بات غیرفعال است. دکمه دانلود تلگرام و بله هر دو URL نهایی GitHub Release را از `DOWNLOAD_URL` می‌گیرند.
+کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود. تعویض APK در بله همیشه غیرفعال است و در تلگرام نیز تا زمان اجرای فعال‌ساز امن GitHub غیرفعال می‌ماند. دکمه دانلود تلگرام و بله هر دو URL نهایی GitHub Release را از `DOWNLOAD_URL` می‌گیرند.
 
 پس از نصب، `/start` را یک‌بار با حساب مدیر و یک‌بار با حساب کاربر عادی تست کنید. در هیچ‌کدام نباید «تعویض فایل APK» یا rollback نمایش داده شود.
 
@@ -83,12 +83,20 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 
 ## 7) انتشار APK
 
-در Releases مخزن `GODS313/Dev` یک Release جدید بسازید و asset را با نام دقیق `hamkare.apk` بارگذاری کنید. پیش از انتشار، ساختار APK، امضای release و SHA-256 را بررسی کنید. پس از انتشار، URL نهایی `releases/latest/download/hamkare.apk` را با دانلود واقعی و نام فایل کنترل کنید.
+workflow دائمی `.github/workflows/publish-hamkare-apk.yml` انتشار را انجام می‌دهد. ورودی‌ها `source_url` و `sha256` هستند؛ URL باید دقیقاً مسیر `https://seskia.online/download.php?src=github-release&sha256=<SHA256>` باشد. workflow اندازه حداکثر ۲۰ MB، ساختار ZIP، `AndroidManifest.xml`، `classes.dex`، سلامت آرشیو، امضای دیجیتال، رد کلید تست Android، تطبیق signer با Release فعلی و SHA-256 را قبل از ایجاد Release بررسی می‌کند.
+
+برای اتصال آپلود تلگرام، یک fine-grained token محدود به مخزن `GODS313/Dev` با `Actions: Read and write` بسازید و روی VPS اجرا کنید:
+
+```bash
+( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-apk-release.sh" )
+```
+
+فعال‌ساز فقط `telegram.env` و override سرویس `hamkare-telegram.service` را تغییر می‌دهد، از هر دو بکاپ می‌گیرد و `bale.env` یا سرویس بله را تغییر نمی‌دهد. سپس مدیر عددی مجاز از منوی «تعویض فایل APK» فایل را به‌شکل Document ارسال می‌کند. بات فایل را در staging هم‌فایل‌سیستم قرار می‌دهد، SHA-256 را به workflow می‌فرستد و فقط پس از تطبیق دانلود public GitHub پیام موفقیت می‌دهد. اگر dispatch، validation، Release یا تأیید نهایی شکست بخورد، آخرین APK عمومی سالم فعال می‌ماند و نسخه محلی نیز در صورت جایگزینی بازگردانده می‌شود.
 
 ## 8) Rollback
 
 در Pages > Deployments یک deployment سالم قبلی را انتخاب و Rollback/Redeploy کنید.
 
-برای rollback خود APK، Release سالم قبلی را دوباره به‌عنوان آخرین Release منتشر کنید یا Release معیوب را از حالت latest خارج کنید. برای rollback کامل سرویس‌های استخدامی، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
+برای rollback خود APK، مدیر تلگرام گزینه بازگردانی را تأیید می‌کند؛ همان نسخه پشتیبان دوباره اعتبارسنجی و از مسیر workflow به latest GitHub Release تبدیل می‌شود. Release تازه تا پیش از آپلود asset به‌صورت Draft می‌ماند و در صورت شکست تأیید نهایی خودکار حذف می‌شود. برای rollback کامل سرویس‌های استخدامی، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
 
 بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیرهای قدیمی محلی صرفاً redirect سازگاری به GitHub Release هستند.

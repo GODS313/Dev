@@ -210,9 +210,11 @@ else
 fi
 unset panel_password panel_password_confirm PANEL_ADMIN_PASSWORD trusted_signer APK_SIGNER_SHA256
 
+TELEGRAM_BRIDGE_PRESERVED=0
 if [[ $HAD_TELEGRAM_ENV -eq 1 ]]; then
   python3 - "$TELEGRAM_ENV" <<'PY'
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -228,12 +230,31 @@ try:
 finally:
     os.close(descriptor)
 
-updates = {
-    "APK_UPLOAD_ENABLED": "false",
-    "APK_DEPLOY_PATH": "",
-    "APK_STAGE_DIR": "",
-    "PUBLIC_VERIFY_ENABLED": "false",
-}
+current = {}
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, value = line.split("=", 1)
+        current[key] = value
+bridge_ready = (
+    re.fullmatch(r"\S{40,255}", current.get("GITHUB_DISPATCH_TOKEN", "")) is not None
+    and current.get("GITHUB_REPOSITORY") == "GODS313/Dev"
+    and current.get("GITHUB_WORKFLOW") == "publish-hamkare-apk.yml"
+    and current.get("APK_SOURCE_URL") == "https://seskia.online/download.php?src=github-release"
+)
+if bridge_ready:
+    updates = {
+        "APK_UPLOAD_ENABLED": "true",
+        "APK_DEPLOY_PATH": "/var/www/seskia/app.apk",
+        "APK_STAGE_DIR": "/var/www/seskia/.hamkare-apk-staging",
+        "PUBLIC_VERIFY_ENABLED": "true",
+    }
+else:
+    updates = {
+        "APK_UPLOAD_ENABLED": "false",
+        "APK_DEPLOY_PATH": "",
+        "APK_STAGE_DIR": "",
+        "PUBLIC_VERIFY_ENABLED": "false",
+    }
 seen = set()
 output = []
 for line in lines:
@@ -264,6 +285,9 @@ finally:
     if os.path.exists(temporary_path):
         os.unlink(temporary_path)
 PY
+  if grep -qx 'APK_UPLOAD_ENABLED=true' "$TELEGRAM_ENV"; then
+    TELEGRAM_BRIDGE_PRESERVED=1
+  fi
 fi
 
 runuser -u www-data -- test -r "$CONFIG_FILE" || { echo 'PHP امکان خواندن config را ندارد.' >&2; exit 1; }
@@ -300,6 +324,10 @@ echo 'آدرس: https://seskia.online/admin.php'
 echo 'مدیریت: توکن بات آپلود، مدیران مجاز، چت گزارش، کانال APK، آپلود مستقیم تا ۲۰۰ MB و rollback'
 echo 'امضای APK به گواهی release نسخه فعلی pin شد.'
 echo 'دانلود ثابت با نام hamkare.apk، cache، ETag و ادامه دانلود فعال شد.'
-[[ $HAD_TELEGRAM_ENV -eq 0 ]] || echo 'دسترسی APK بات استخدامی تلگرام غیرفعال و فقط همان سرویس restart شد.'
+if [[ $TELEGRAM_BRIDGE_PRESERVED -eq 1 ]]; then
+  echo 'پل امن انتشار GitHub بات تلگرام حفظ و فقط همان سرویس restart شد.'
+elif [[ $HAD_TELEGRAM_ENV -eq 1 ]]; then
+  echo 'دسترسی APK بات استخدامی تلگرام بدون پل GitHub غیرفعال و فقط همان سرویس restart شد.'
+fi
 echo 'بات بله و فایل‌های آن تغییر نکردند.'
 echo "بکاپ قابل‌بازیابی: $SNAPSHOT"
