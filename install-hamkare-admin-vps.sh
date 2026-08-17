@@ -248,6 +248,14 @@ HAMKARE_BALE_ENV=$BALE_ENV
 EOF
 chmod 0600 "$SYNC_ENV"
 chown root:root "$SYNC_ENV"
+
+# Fail safely before retiring the old writer. This call also proves that the
+# deployed Function, D1 binding, encryption key and VPS_SYNC_KEY agree.
+VPS_SYNC_KEY="$SYNC_KEY" \
+HAMKARE_SYNC_URL="$SYNC_URL" \
+HAMKARE_TELEGRAM_ENV="$TG_ENV" \
+HAMKARE_BALE_ENV="$BALE_ENV" \
+  "$SYNC_PROGRAM"
 unset SYNC_KEY
 
 cat > /etc/systemd/system/hamkare-admin-sync.service <<EOF

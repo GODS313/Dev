@@ -36,6 +36,11 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         self.assertIn("Location: https://adlisho.online/admin", INSTALLER)
         self.assertNotIn("مدیریت دانلود، تلگرام و بله", INSTALLER)
 
+    def test_remote_sync_is_proven_before_legacy_writer_is_retired(self):
+        preflight = INSTALLER.index('  "$SYNC_PROGRAM"')
+        retirement = INSTALLER.index('rm -f /etc/sudoers.d/hamkare-admin')
+        self.assertLess(preflight, retirement)
+
 
 if __name__ == '__main__':
     unittest.main()
