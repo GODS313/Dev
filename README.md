@@ -27,6 +27,8 @@
 
 `GET /api/admin/sync` فقط با secret مستقل `VPS_SYNC_KEY` قابل خواندن است. عامل همگام‌سازی VPS هر ۳۰ ثانیه revision را دریافت، فایل env هر بستر را جداگانه و با `fsync + rename` جایگزین و فقط همان سرویسی را restart می‌کند که مقدارهایش واقعاً تغییر کرده‌اند. تغییر تلگرام به `bale.env` دست نمی‌زند و سرویس بله را restart نمی‌کند؛ تغییر صرفِ منبع APK نیز هیچ رباتی را restart نمی‌کند.
 
+قرارداد production این endpoint شامل کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` است. مقدار هر بستر یا `null` است یا فقط کلیدهای `token` و `chat_id` را دارد؛ عامل VPS نیز دقیقاً همین نام‌ها را مصرف می‌کند.
+
 مسیر نهایی و یکتای دانلود `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` است. دکمه سایت، QR، ربات تلگرام، ربات بله، پنل و مسیرهای سازگاری `/download` و `/download.php` همگی به همین Release هدایت می‌شوند.
 
 نصب عامل sync روی VPS:
