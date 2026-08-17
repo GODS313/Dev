@@ -20,10 +20,10 @@ class BaleSimpleFlowStaticTests(unittest.TestCase):
         self.assertIn('file_name.lower().endswith(".apk")', BOT)
         self.assertIn('"https://tapi.bale.ai/file/bot"', BOT)
 
-    def test_activator_uses_stable_local_endpoint_and_preserves_secrets(self):
-        self.assertIn("https://seskia.online/download.php?src=hamkare", ENABLE)
-        self.assertIn('"APK_UPLOAD_ENABLED": "true"', ENABLE)
-        self.assertIn('"GITHUB_DISPATCH_TOKEN": ""', ENABLE)
+    def test_activator_uses_stable_github_file_and_preserves_secrets(self):
+        self.assertIn("https://raw.githubusercontent.com/GODS313/Dev/main/uploads/hamkare.apk", ENABLE)
+        self.assertIn('"APK_UPLOAD_ENABLED": "false"', ENABLE)
+        self.assertIn('"APK_DEPLOY_PATH": ""', ENABLE)
         self.assertIn('cp -a "$ENV_FILE" "$BACKUP_DIR/bale.env"', ENABLE)
         self.assertNotIn("BOT_TOKEN=", ENABLE)
         self.assertNotIn("ADMIN_IDS=", ENABLE)
