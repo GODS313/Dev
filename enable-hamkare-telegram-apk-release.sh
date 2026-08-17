@@ -6,26 +6,31 @@ umask 077
 for required in flock python3 realpath systemctl; do
   command -v "$required" >/dev/null || { echo "دستور لازم موجود نیست: $required" >&2; exit 1; }
 done
-exec 9>/run/lock/hamkare-telegram-apk-release.lock
+PLATFORM=telegram
+if [[ "${1:-}" == "--platform" ]]; then PLATFORM="${2:-}"; shift 2; fi
+[[ "$PLATFORM" == telegram || "$PLATFORM" == bale ]] || { echo 'پلتفرم باید telegram یا bale باشد.' >&2; exit 1; }
+
+exec 9>/run/lock/hamkare-apk-release.lock
 flock -n 9 || { echo 'فعال‌سازی دیگری هم‌زمان در حال اجراست.' >&2; exit 1; }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 SOURCE_OVERRIDE="$SCRIPT_DIR/systemd/hamkare-telegram-apk-release.conf"
 APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
-TG_ENV="$APP_DIR/telegram.env"
+ENV_FILE="$APP_DIR/$PLATFORM.env"
 BOT_TARGET="$APP_DIR/bot.py"
 APK_ROOT=/var/www/seskia
 APK_TARGET=$APK_ROOT/app.apk
 APK_STAGE=$APK_ROOT/.hamkare-apk-staging
-OVERRIDE_DIR=/etc/systemd/system/hamkare-telegram.service.d
+SERVICE="hamkare-$PLATFORM.service"
+OVERRIDE_DIR="/etc/systemd/system/$SERVICE.d"
 OVERRIDE_FILE=$OVERRIDE_DIR/apk-release.conf
-BACKUP_DIR="$(mktemp -d /var/backups/hamkare-telegram-apk-release-XXXXXXXX)"
+BACKUP_DIR="$(mktemp -d "/var/backups/hamkare-$PLATFORM-apk-release-XXXXXXXX")"
 
 for source in "$SOURCE_BOT" "$SOURCE_OVERRIDE"; do
   [[ -f "$source" && ! -L "$source" ]] || { echo "فایل منبع معتبر نیست: $source" >&2; exit 1; }
 done
-[[ -f "$TG_ENV" && ! -L "$TG_ENV" ]] || { echo "telegram.env امن پیدا نشد: $TG_ENV" >&2; exit 1; }
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || { echo "$PLATFORM.env امن پیدا نشد: $ENV_FILE" >&2; exit 1; }
 [[ -f "$BOT_TARGET" && ! -L "$BOT_TARGET" ]] || { echo "bot.py امن پیدا نشد: $BOT_TARGET" >&2; exit 1; }
 [[ -d "$APK_ROOT" && ! -L "$APK_ROOT" && "$(realpath -e -- "$APK_ROOT")" == "$APK_ROOT" ]] || {
   echo 'مسیر امن Seskia پیدا نشد.' >&2; exit 1;
@@ -63,7 +68,7 @@ with urllib.request.urlopen(request, timeout=30) as response:
         raise RuntimeError(f"workflow lookup returned HTTP {response.status}")
 PY
 
-cp -a "$TG_ENV" "$BACKUP_DIR/telegram.env"
+cp -a "$ENV_FILE" "$BACKUP_DIR/$PLATFORM.env"
 cp -a "$BOT_TARGET" "$BACKUP_DIR/bot.py"
 HAD_OVERRIDE=0
 if [[ -f "$OVERRIDE_FILE" && ! -L "$OVERRIDE_FILE" ]]; then
@@ -78,7 +83,7 @@ INSTALL_COMPLETE=0
 rollback_enable() {
   local exit_code=$?
   if [[ $INSTALL_COMPLETE -eq 0 ]]; then
-    cp -a "$BACKUP_DIR/telegram.env" "$TG_ENV" 2>/dev/null || true
+    cp -a "$BACKUP_DIR/$PLATFORM.env" "$ENV_FILE" 2>/dev/null || true
     cp -a "$BACKUP_DIR/bot.py" "$BOT_TARGET" 2>/dev/null || true
     if [[ $HAD_OVERRIDE -eq 1 ]]; then
       cp -a "$BACKUP_DIR/apk-release.conf" "$OVERRIDE_FILE" 2>/dev/null || true
@@ -86,7 +91,7 @@ rollback_enable() {
       rm -f -- "$OVERRIDE_FILE"
     fi
     systemctl daemon-reload 2>/dev/null || true
-    systemctl try-restart hamkare-telegram.service 2>/dev/null || true
+    systemctl try-restart "$SERVICE" 2>/dev/null || true
     echo "فعال‌سازی ناموفق بود و نسخه قبلی بازگردانده شد. بکاپ: $BACKUP_DIR" >&2
   fi
   return "$exit_code"
@@ -98,7 +103,7 @@ install -o root -g root -m 0750 "$SOURCE_BOT" "$BOT_TARGET"
 install -d -o root -g root -m 0755 "$OVERRIDE_DIR"
 install -o root -g root -m 0644 "$SOURCE_OVERRIDE" "$OVERRIDE_FILE"
 
-BRIDGE_TOKEN="$GITHUB_DISPATCH_TOKEN" python3 - "$TG_ENV" <<'PY'
+BRIDGE_TOKEN="$GITHUB_DISPATCH_TOKEN" python3 - "$ENV_FILE" <<'PY'
 import os
 import stat
 import sys
@@ -109,7 +114,7 @@ descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
 try:
     info = os.fstat(descriptor)
     if not stat.S_ISREG(info.st_mode):
-        raise RuntimeError("telegram.env is not a regular file")
+        raise RuntimeError("platform env is not a regular file")
     with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as source:
         lines = source.read().splitlines()
 finally:
@@ -140,7 +145,7 @@ for key, value in updates.items():
     if key not in seen:
         output.append(f"{key}={value}")
 
-fd, temporary = tempfile.mkstemp(prefix=".telegram-env-", dir=os.path.dirname(path))
+fd, temporary = tempfile.mkstemp(prefix=".hamkare-env-", dir=os.path.dirname(path))
 try:
     os.fchmod(fd, stat.S_IMODE(info.st_mode))
     os.fchown(fd, info.st_uid, info.st_gid)
@@ -161,12 +166,12 @@ unset GITHUB_DISPATCH_TOKEN BRIDGE_TOKEN
 
 python3 -m py_compile "$BOT_TARGET"
 systemctl daemon-reload
-systemctl restart hamkare-telegram.service
-systemctl is-active --quiet hamkare-telegram.service
+systemctl restart "$SERVICE"
+systemctl is-active --quiet "$SERVICE"
 
 INSTALL_COMPLETE=1
-echo '✅ آپلود مدیر تلگرام به GitHub Release متصل شد.'
+echo "✅ آپلود اضطراری مدیر $PLATFORM به GitHub Release متصل شد."
 echo '✅ دکمه بله، تلگرام و سایت: https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'
-echo 'بات بله و bale.env تغییر نکردند.'
+echo "فقط $PLATFORM.env و سرویس $SERVICE تغییر کردند."
 echo "بکاپ: $BACKUP_DIR"
-echo 'تست نهایی: در تلگرام با حساب مدیر، پنل مدیریت ← تعویض فایل APK را انتخاب کنید.'
+echo "تست نهایی: در $PLATFORM با حساب مدیر، پنل مدیریت ← تعویض فایل APK را انتخاب کنید."
