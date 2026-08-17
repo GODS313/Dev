@@ -1,0 +1,35 @@
+name: Publish uploaded Hamkare APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-uploaded-hamkare.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reassemble and validate APK
+        run: |
+          set -euo pipefail
+          cat .release/parts/part-* > hamkare.apk
+          echo "4b747b09ad0f43f84fcd3aba562eec5af07c65b22b4a29cbf11759c6e9b8bb8d  hamkare.apk" | sha256sum -c -
+          test "$(stat -c '%s' hamkare.apk)" -eq 4177264
+          zipinfo -1 hamkare.apk | grep -qx 'AndroidManifest.xml'
+          zipinfo -1 hamkare.apk | grep -qx 'classes.dex'
+          zipinfo -1 hamkare.apk | grep -qx 'resources.arsc'
+
+      - name: Publish as latest GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="hamkare-upload-${GITHUB_RUN_ID}"
+          gh release create "$tag"             hamkare.apk#hamkare.apk             --repo "${GITHUB_REPOSITORY}"             --target "${GITHUB_SHA}"             --title "Hamkare Android"             --notes "نسخه آپلودشده توسط مدیر همکاره. SHA-256: 4b747b09ad0f43f84fcd3aba562eec5af07c65b22b4a29cbf11759c6e9b8bb8d"             --latest
