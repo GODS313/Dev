@@ -45,9 +45,24 @@ async function fetchAllowed(startUrl, hosts) {
   return null;
 }
 
+async function configuredUpstream(env) {
+  if (env.DB) {
+    try {
+      const result = await env.DB.prepare(
+        "SELECT key,value FROM bot_settings WHERE key IN ('download_source','download_url')",
+      ).all();
+      const values = Object.fromEntries((result.results || []).map((row) => [row.key, row.value]));
+      if (values.download_source || values.download_url) return values.download_source || values.download_url;
+    } catch (error) {
+      console.error('download config lookup failed', error instanceof Error ? error.name : 'unknown');
+    }
+  }
+  return String(env.APK_DOWNLOAD_URL || '').trim();
+}
+
 export async function onRequestGet({ env }) {
   const hosts = allowedHosts(env);
-  const configured = safeUpstream(String(env.APK_DOWNLOAD_URL || '').trim(), hosts);
+  const configured = safeUpstream(await configuredUpstream(env), hosts);
   const fallback = safeUpstream(DEFAULT_UPSTREAM, hosts);
   const upstreams = [...new Set([configured, fallback].filter(Boolean))];
   for (const url of upstreams) {

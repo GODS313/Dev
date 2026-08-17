@@ -22,9 +22,25 @@
 
 شاخه Production برابر `main`، پوشه خروجی `/` و Build command خالی است. Binding دیتابیس D1 باید با نام `DB` در Cloudflare Pages تعریف شود و migration موجود در `migrations/001_create_registrations.sql` اجرا شود. جزئیات کامل در [DEPLOYMENT.md](DEPLOYMENT.md) قرار دارد.
 
-## مدیریت اپلیکیشن و گزارش تلگرام
+## پنل production و منبع واحد تنظیمات
 
-در نسخه نهایی، بات استخدامی تلگرام `@Pasokh313e_bot` و بات بله به فایل APK دسترسی مستقیم ندارند. مدیریت توکن بات اختصاصی آپلود، شناسه مدیران، چت گزارش، کانال‌های مجاز، آپلود مستقیم APK و rollback از پنل خصوصی `https://seskia.online/admin.php` انجام می‌شود. پنل تنظیمات موجود `/var/lib/seskia/config.json` و webhook موجود `/telegram.php` را به‌روزرسانی می‌کند و هیچ فایل یا تنظیم Bale را تغییر نمی‌دهد.
+مسیر canonical مدیریت فقط `https://adlisho.online/admin` است و Cloudflare D1 تنها source of truth برای `download_source`، توکن و Chat ID تلگرام و بله است. ذخیره‌های چندفیلدی با `D1 batch` همراه یک `config_revision` انجام می‌شوند؛ بنابراین revision ناقص یا ترکیبی منتشر نمی‌شود.
+
+`GET /api/admin/sync` فقط با secret مستقل `VPS_SYNC_KEY` قابل خواندن است. عامل همگام‌سازی VPS هر ۳۰ ثانیه revision را دریافت، فایل env هر بستر را جداگانه و با `fsync + rename` جایگزین و فقط همان سرویسی را restart می‌کند که مقدارهایش واقعاً تغییر کرده‌اند. تغییر تلگرام به `bale.env` دست نمی‌زند و سرویس بله را restart نمی‌کند؛ تغییر صرفِ منبع APK نیز هیچ رباتی را restart نمی‌کند.
+
+`adlisho.online/download.php` مسیر عمومی ثابت است. تابع دانلود مقدار `download_source` را مستقیماً از همان D1 می‌خواند، پس ذخیره پنل و مقصد دانلود از یک config استفاده می‌کنند. کلید قدیمی `download_url` فقط برای مهاجرت خوانده می‌شود و ذخیره‌های جدید فقط `download_source` می‌نویسند.
+
+نصب عامل sync روی VPS:
+
+```bash
+curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/GODS313/Dev/main/install-hamkare-admin-vps.sh && sudo bash /tmp/install-hamkare-admin-vps.sh
+```
+
+نصاب مقدار همان `VPS_SYNC_KEY` ثبت‌شده در Cloudflare را به‌صورت مخفی می‌پرسد، writer محلی قدیمی را پس از بکاپ بازنشسته می‌کند و `admin.php` قدیمی را با redirect دائمی به `/admin` جایگزین می‌کند.
+
+## مدیریت APK و پنل مستقل Seskia
+
+بات استخدامی تلگرام `@Pasokh313e_bot` و بات بله به فایل APK دسترسی مستقیم ندارند. پنل مستقل `https://seskia.online/admin.php` فقط انتشار/rollback APK و بات اختصاصی آپلود Seskia را مدیریت می‌کند؛ فایل‌ها و تنظیمات Bale همچنان خارج از محدوده آن هستند. تنظیمات ربات‌های استخدامی فقط از پنل production همکاره در `/admin` مدیریت می‌شوند.
 
 نصب یا ارتقای پنل روی VPS:
 

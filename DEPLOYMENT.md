@@ -25,14 +25,18 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 به‌جای `<D1_DATABASE_NAME>` نام واقعی دیتابیس D1 را قرار دهید. پس از اجرا، وجود جدول `registrations` را در D1 Console بررسی کنید.
 
-## 3) Functions و مسیرها
+## 3) Functions، پنل واحد و مسیرها
 
 - `functions/api/register.js` → `POST /api/register`
 - `functions/api/result.js` → `GET /api/result?code=...&last4=...`
+- `functions/api/admin/config.js` → API پنل canonical در `/admin`
+- `functions/api/admin/sync.js` → خواندن محافظت‌شده تنظیمات توسط VPS
 - `functions/download.js` → `GET /download`
 - مسیر قدیمی `/download.php` با `_redirects` به `/download` هدایت می‌شود.
 
-متغیر اختیاری `APK_DOWNLOAD_URL` باید یک URL کامل HTTPS برای APK باشد. مقدار production فعلی `https://seskia.online/est/download` است و در صورت تنظیم‌نشدن متغیر، gateway همین مقصد را استفاده می‌کند. توکن و secret را فقط در Cloudflare environment variables قرار دهید.
+پنل production فقط در `https://adlisho.online/admin` ارائه می‌شود. `/admin.html` و `/admin.php` به آن redirect می‌شوند. سه secret اجباری `ADMIN_PASSWORD`، `CONFIG_ENCRYPTION_KEY` و `VPS_SYNC_KEY` را در Cloudflare encrypted secrets قرار دهید. `VPS_SYNC_KEY` باید یک مقدار تصادفی مستقل ۳۲ تا ۱۲۸ نویسه‌ای باشد و همان مقدار هنگام نصب sync agent روی VPS وارد شود.
+
+تابع دانلود ابتدا `download_source` را از D1 می‌خواند و فقط برای مهاجرت کلید قدیمی `download_url` را قبول می‌کند. `APK_DOWNLOAD_URL` صرفاً fallback زمان نبودن رکورد D1 است. مقدار production اولیه `https://seskia.online/est/download` است.
 
 برای وایت‌لیبل‌های دیگر، `PUBLIC_ORIGINS` را با دامنه‌های HTTPS مجاز و `APK_ALLOWED_HOSTS` را با hostnameهای مجاز upstream تنظیم کنید. gateway مقصدهای خارج از allowlist را رد می‌کند و فایل را حداکثر پنج دقیقه روی لبه Cloudflare cache می‌کند.
 
@@ -53,7 +57,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 6. `GET /download.php` باید به `/download` redirect شود.
 7. در D1 Console درج سطر در جدول `registrations` را تأیید کنید.
 
-## 6) استقرار بات‌های تلگرام و بله
+## 6) استقرار بات‌ها و عامل sync
 
 ```bash
 sudo bash deploy-hamkare-bots.sh
@@ -68,6 +72,14 @@ sudo bash deploy-hamkare-bots.sh
 کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود، اما تعویض APK در بات استخدامی تلگرام غیرفعال است تا با webhook اصلی Seskia رقابت نکند. رفتار بات بله همان حالت قبلیِ بدون آپلود APK باقی می‌ماند.
 
 پس از نصب، `/start` را یک‌بار با حساب مدیر و یک‌بار با حساب کاربر عادی تست کنید. در هیچ‌کدام نباید «تعویض فایل APK» یا rollback نمایش داده شود.
+
+بعد از deploy شدن Functions و ثبت secrets، عامل production را نصب کنید:
+
+```bash
+curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/GODS313/Dev/main/install-hamkare-admin-vps.sh && sudo bash /tmp/install-hamkare-admin-vps.sh
+```
+
+این نصب‌کننده دیگر `admin.php` نویسنده config نمی‌سازد. writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. تغییر منبع APK در D1 مستقیماً روی `/download.php` اثر می‌گذارد و چون URL عمومی ربات‌ها ثابت است، موجب restart ربات‌ها نمی‌شود.
 
 ## 7) پنل مدیریت APK و گزارش تلگرام روی Seskia
 
@@ -91,4 +103,4 @@ sudo bash install-seskia-admin-panel.sh
 
 برای rollback خود APK، از بخش «بازگردانی نسخه قبل» در پنل `admin.php` استفاده کنید؛ نسخه جاری نیز پیش از بازگردانی قابل‌بازیابی می‌ماند. برای rollback کامل نصب پنل، بکاپ `/var/backups/seskia-admin-panel-<timestamp>` ساخته می‌شود. برای rollback کامل سرویس‌های استخدامی، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
 
-اسکریپت قدیمی VPS پیش از کپی از کل web root بکاپ می‌گیرد و فایل PHP مدیریت‌نشده/قدیمی `download.php` را نگه نمی‌دارد. مسیر رسمی قدیمی در Cloudflare Pages با `_redirects` به gateway امن `/download` هدایت می‌شود.
+بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیر رسمی قدیمی دانلود در Cloudflare Pages با `_redirects` به gateway `/download` هدایت می‌شود.
