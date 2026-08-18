@@ -135,12 +135,13 @@ import sys
 import tempfile
 
 updates = {
-    "DOWNLOAD_URL": "https://adlisho.online/download",
+    "DOWNLOAD_URL": "https://adlisho.online/download.php",
     "SITE_URL": "https://adlisho.online",
     "SUPPORT_URL": "https://adlisho.online/contact.html",
     "PRIVACY_URL": "https://adlisho.online/privacy.html",
     "TRACKING_URL": "https://adlisho.online/result.html",
 }
+
 for path in sys.argv[1:]:
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
@@ -178,18 +179,42 @@ PY
   sleep 5
   systemctl is-active --quiet hamkare-telegram.service
   systemctl is-active --quiet hamkare-bale.service
-  echo '✅ سایت، تلگرام و بله به https://adlisho.online/download متصل شدند.'
+  echo '✅ سایت، تلگرام و بله به https://adlisho.online/download.php متصل شدند.'
   echo "✅ توکن‌ها و Chat IDها تغییر نکردند. بکاپ: $backup"
+}
+
+install_telegram_iran_check() {
+  [[ "$APP" =~ ^/(opt|srv)/[A-Za-z0-9._/-]+$ ]] || { echo 'HAMKARE_APP_DIR باید زیر /opt یا /srv باشد.' >&2; return 1; }
+  APP="$(realpath -m -- "$APP")"
+  [[ -d "$APP" && -f "$APP/telegram.env" && -f "$APP/bot.py" ]] || { echo 'نصب تلگرام همکاره پیدا نشد.' >&2; return 1; }
+  local backup="$APP/bot.py.backup.$(date +%Y%m%d-%H%M%S)"
+  cp -a -- "$APP/bot.py" "$backup"
+  install -o root -g root -m 0750 "$SCRIPT_DIR/bot/hamkare_bot.py" "$APP/bot.py"
+  if ! python3 -m py_compile "$APP/bot.py"; then
+    install -o root -g root -m 0750 "$backup" "$APP/bot.py"
+    echo '❌ کد جدید معتبر نبود؛ bot.py قبلی بازگردانده شد.' >&2
+    return 1
+  fi
+  systemctl restart hamkare-telegram.service
+  sleep 4
+  if ! systemctl is-active --quiet hamkare-telegram.service; then
+    install -o root -g root -m 0750 "$backup" "$APP/bot.py"
+    systemctl restart hamkare-telegram.service || true
+    echo '❌ سلامت تلگرام تأیید نشد؛ bot.py قبلی بازگردانده شد.' >&2
+    return 1
+  fi
+  echo '✅ ابزار تست ایران فقط روی ربات تلگرام نصب شد؛ env و secretها تغییر نکردند.'
 }
 
 if [[ "${1:-}" == --repair ]]; then repair_mode; exit $?; fi
 if [[ "${1:-}" == --restore-adlisho-routes ]]; then restore_adlisho_routes; exit $?; fi
+if [[ "${1:-}" == --install-telegram-iran-check ]]; then install_telegram_iran_check; exit $?; fi
 
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 [[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
 BRAND_NAME="${BRAND_NAME:-همکاره}"
 SITE_URL="${SITE_URL:-https://adlisho.online}"
-DOWNLOAD_URL='https://adlisho.online/download'
+DOWNLOAD_URL='https://adlisho.online/download.php'
 SUPPORT_URL="${SUPPORT_URL:-https://adlisho.online/contact.html}"
 PRIVACY_URL="${PRIVACY_URL:-https://adlisho.online/privacy.html}"
 TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"
@@ -300,7 +325,7 @@ echo '✅ هر دو بات وایت‌لیبل همکاره فعال شدند.'
 echo "تلگرام: https://t.me/$TELEGRAM_BOT_USERNAME"
 echo "بله: https://ble.ir/$BALE_BOT_USERNAME"
 echo "دانلود ثابت: $DOWNLOAD_URL"
-echo 'تعویض مستقیم APK تلگرام: enable-hamkare-telegram-direct-apk.sh را روی VPS اجرا کنید؛ آپلود بله غیرفعال می‌ماند.'
+echo 'تعویض فایل APK: فقط با انتشار فایل hamkare.apk در GitHub Release پروژه GODS313/Dev'
 echo 'بات استخدامی تلگرام و بات بله هیچ دسترسی مستقیم به فایل APK ندارند.'
 [[ -z "$BACKUP" ]] || echo "بکاپ نسخه قبلی: $BACKUP"
 echo 'تست: /start را از یک حساب مدیر و یک حساب کاربر عادی در هر دو بات اجرا کنید.'

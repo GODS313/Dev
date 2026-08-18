@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import fcntl
 import hashlib
 import json
@@ -13,6 +14,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -32,11 +34,23 @@ ADMIN_ACTIONS = {
     "admin_upload",
     "admin_toggle_pause",
     "admin_current_app",
-    "admin_positions",
-    "admin_positions_edit",
     "admin_rollback",
     "admin_rollback_confirm",
+    "admin_iran_check",
 }
+CHECK_HOST_BASE = "https://check-host.net"
+IRAN_ROUTE_PATHS = (
+    ("خانه", "/"),
+    ("ورودی همکاره", "/est/"),
+    ("ورود", "/auth/login"),
+    ("ورود همکاره", "/est/auth/login"),
+    ("ثبت نام", "/register/"),
+    ("آزمون", "/exam/"),
+    ("اپ", "/app/"),
+    ("سلامت API", "/est/api/health"),
+    ("نسخه API", "/est/api/version"),
+    ("دانلود", "/download.php"),
+)
 APK_MIME_TYPES = {
     "application/vnd.android.package-archive",
     "application/zip",
@@ -46,7 +60,6 @@ REJECTED_SIGNER_CERT_DIGESTS = {
     # Public Android AOSP test key; it is not a private production identity.
     "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
 }
-BANNER_URL = "https://seskia.online/hamkare-bot-banner.png"
 
 
 def normalize(value: object) -> str:
@@ -112,6 +125,110 @@ def valid_https_url(value: str) -> bool:
 
 def can_access_action(action: str, user_id: str, admin_ids: frozenset[str]) -> bool:
     return action not in ADMIN_ACTIONS or user_id in admin_ids
+
+
+def check_host_json(path: str, query: list[tuple[str, str]] | None = None) -> dict:
+    """Read a bounded JSON response from the fixed Check-Host API origin."""
+    url = CHECK_HOST_BASE + path
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "HamkareBot/2.1"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        raw = response.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise RuntimeError("پاسخ سرویس نود بیش از حد بزرگ بود")
+    output = json.loads(raw)
+    if not isinstance(output, dict):
+        raise RuntimeError("پاسخ سرویس نود نامعتبر بود")
+    return output
+
+
+def discover_iran_nodes() -> dict[str, tuple[str, str]]:
+    output = check_host_json("/nodes/hosts")
+    candidates: dict[str, tuple[str, str]] = {}
+    for node, detail in output.get("nodes", {}).items():
+        location = detail.get("location", []) if isinstance(detail, dict) else []
+        if (
+            isinstance(node, str)
+            and re.fullmatch(r"ir\d+\.node\.check-host\.net", node)
+            and len(location) >= 3
+            and str(location[0]).lower() == "ir"
+        ):
+            candidates[node] = (str(location[1]), str(location[2]))
+    return dict(sorted(candidates.items())[:4])
+
+
+def check_route_from_iran(url: str, nodes: tuple[str, ...]) -> dict[str, str]:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname != "adlisho.online":
+        raise ValueError("Iran route checks are restricted to adlisho.online")
+    query = [("host", url), *[("node", node) for node in nodes]]
+    started = check_host_json("/check-http", query)
+    request_id = str(started.get("request_id", ""))
+    selected = started.get("nodes", {})
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", request_id):
+        raise RuntimeError("شناسه تست نود دریافت نشد")
+    if not isinstance(selected, dict) or not selected or not set(selected).issubset(nodes):
+        raise RuntimeError("سرویس نود خارج از ایران برگرداند")
+    results: dict = {}
+    for attempt in range(6):
+        if attempt:
+            time.sleep(1.5)
+        results = check_host_json("/check-result/" + request_id)
+        if all(results.get(node) is not None for node in selected):
+            break
+    statuses: dict[str, str] = {}
+    for node in selected:
+        value = results.get(node)
+        try:
+            status = str(value[0][3])
+            statuses[node] = status if re.fullmatch(r"\d{3}", status) else "خطا"
+        except (IndexError, KeyError, TypeError):
+            statuses[node] = "timeout"
+    return statuses
+
+
+def format_iran_route_report(site_url: str) -> str:
+    nodes = discover_iran_nodes()
+    if not nodes:
+        return "❌ هیچ نود تأییدشده‌ای با کشور IR در سرویس probe پیدا نشد."
+    node_names = tuple(nodes)
+    origin = "https://adlisho.online"
+    if urllib.parse.urlsplit(site_url).hostname != "adlisho.online":
+        raise ValueError("SITE_URL must use adlisho.online for Iran checks")
+    lines = [
+        "🇮🇷 نتیجه تست واقعی از نودهای ایران",
+        "نودها: " + "، ".join(f"{name.split('.')[0]} ({city})" for name, (_, city) in nodes.items()),
+        "",
+    ]
+    completed: dict[str, dict[str, str] | Exception] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        pending = {
+            path: executor.submit(check_route_from_iran, origin + path, node_names)
+            for _, path in IRAN_ROUTE_PATHS
+        }
+        for path, future in pending.items():
+            try:
+                completed[path] = future.result()
+            except Exception as error:
+                completed[path] = error
+    for label, path in IRAN_ROUTE_PATHS:
+        try:
+            value = completed[path]
+            if isinstance(value, Exception):
+                raise value
+            statuses = value
+            good = sum(status.startswith(("2", "3")) for status in statuses.values())
+            marker = "✅" if good == len(statuses) and good else "⚠️" if good else "❌"
+            detail = "، ".join(f"{node.split('.')[0]}:{status}" for node, status in statuses.items())
+            lines.append(f"{marker} {label} {path} — {detail or 'بدون نتیجه'}")
+        except Exception as error:
+            lines.append(f"❌ {label} {path} — {type(error).__name__}")
+    lines.extend(("", "این تست فقط GET عمومی و غیرمخرب است؛ رمز، OTP یا داده‌ای ارسال نشد."))
+    return "\n".join(lines)
 
 
 def can_upload_apk(
@@ -423,7 +540,8 @@ class Config:
         apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
         release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
         if enabled:
-            public_url = "https://adlisho.online/download"
+            public_url = "https://adlisho.online/download.php"
+            local_url = "https://seskia.online/download.php?src=hamkare"
             if github_dispatch_token:
                 if urls["DOWNLOAD_URL"] != public_url:
                     raise ValueError("DOWNLOAD_URL must be the canonical Adlisho endpoint")
@@ -432,8 +550,8 @@ class Config:
                 if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
                     raise ValueError("GitHub release workflow configuration is invalid")
                 release_source_url(apk_source_url, "0" * 64)
-            elif platform != "telegram" or urls["DOWNLOAD_URL"] != public_url:
-                raise ValueError("direct APK publication is allowed only for Telegram on the canonical Adlisho URL")
+            elif platform != "bale" or urls["DOWNLOAD_URL"] != local_url:
+                raise ValueError("local APK publication is allowed only for Bale on the canonical Seskia URL")
             if not public_verify_enabled:
                 raise ValueError("PUBLIC_VERIFY_ENABLED must stay true for APK publication")
             if not 60 <= release_wait_seconds <= 600:
@@ -502,6 +620,7 @@ class Bot:
         )
         self.connection.commit()
         self.last_action: dict[str, float] = {}
+        self.iran_check_lock = threading.Lock()
         if config.apk_stage_dir is not None and config.apk_deploy_path is not None:
             config.apk_stage_dir.mkdir(mode=0o700, exist_ok=True)
             os.chmod(config.apk_stage_dir, 0o700)
@@ -548,18 +667,6 @@ class Bot:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         return self.api("sendMessage", payload)
 
-    def send_banner(self, chat_id: object, text: str, keyboard: list) -> dict:
-        payload = {
-            "chat_id": chat_id,
-            "photo": BANNER_URL,
-            "caption": text,
-            "reply_markup": {"inline_keyboard": keyboard},
-        }
-        try:
-            return self.api("sendPhoto", payload)
-        except Exception:
-            return self.send(chat_id, text, keyboard)
-
     def answer(self, callback_id: str, text: str = "") -> None:
         try:
             payload = {"callback_query_id": callback_id}
@@ -605,47 +712,15 @@ class Bot:
     def paused(self) -> bool:
         return self.setting("registrations_paused", "0") == "1"
 
-    def positions(self) -> list[tuple[str, str]]:
-        defaults = [
-            ("پشتیبانی متقاضیان", "پاسخ‌گویی و راهنمایی متقاضیان"),
-            ("هماهنگی و عملیات", "هماهنگی فرایندها و بررسی اولیه"),
-            ("توسعه بازار", "معرفی خدمات و توسعه ارتباطات"),
-            ("نماینده استانی", "همکاری در استان محل سکونت"),
-        ]
-        try:
-            values = json.loads(self.setting("job_positions", ""))
-            if not isinstance(values, list) or len(values) != 4:
-                return defaults
-            positions = []
-            for value in values:
-                if not isinstance(value, dict):
-                    return defaults
-                title = normalize(value.get("title", ""))
-                description = normalize(value.get("description", ""))
-                if not 2 <= len(title) <= 32 or not 2 <= len(description) <= 160:
-                    return defaults
-                positions.append((title, description))
-            return positions
-        except (TypeError, ValueError, json.JSONDecodeError):
-            return defaults
-
-    def show_positions(self, chat_id: object) -> None:
-        positions = self.positions()
-        buttons = [
-            {"text": f"💼 {title}", "callback_data": f"position_{index}"}
-            for index, (title, _description) in enumerate(positions)
-        ]
-        self.send(chat_id, "سمت موردنظر را انتخاب کنید:", [
-            [buttons[0], buttons[1]], [buttons[2], buttons[3]],
-            [{"text": "🏠 منوی اصلی", "callback_data": "menu"}],
-        ])
-
     def user_menu(self, user_id: str) -> list:
-        first_label = "📥 دریافت دفترچه استخدام" if self.is_registered(user_id) else "📝 شروع ثبت‌نام"
+        first_label = "📥 دریافت اپلیکیشن" if self.is_registered(user_id) else "📝 شروع ثبت‌نام"
         first_action = "download" if self.is_registered(user_id) else "register"
         rows = [
             [{"text": first_label, "callback_data": first_action}],
-            [{"text": "💼 سمت‌ها و فرصت‌های همکاری", "callback_data": "positions"}],
+            [
+                {"text": "🌐 وب‌سایت رسمی", "url": self.config.site_url},
+                {"text": "🔎 پیگیری درخواست", "url": self.config.tracking_url},
+            ],
             [
                 {"text": "☎️ پشتیبانی", "url": self.config.support_url},
                 {"text": "🔐 حریم خصوصی", "callback_data": "privacy"},
@@ -657,10 +732,11 @@ class Bot:
         return rows
 
     def show_menu(self, chat_id: object, user_id: str) -> None:
-        self.send_banner(
+        role = "مدیر" if self.is_admin(user_id) else "کاربر"
+        self.send(
             chat_id,
             f"به «{self.config.brand_name}» خوش آمدید 👋\n"
-            "فرصت‌های همکاری سراسر کشور\n\nمسیر مناسب خود را انتخاب کنید:",
+            f"وضعیت ورود: {role}\n\nیکی از گزینه‌های زیر را انتخاب کنید:",
             self.user_menu(user_id),
         )
 
@@ -678,7 +754,6 @@ class Bot:
                 {"text": "🔗 لینک فعلی", "callback_data": "admin_current_app"},
             ],
             [{"text": "⏸ توقف/ادامه ثبت‌نام", "callback_data": "admin_toggle_pause"}],
-            [{"text": "💼 مدیریت چهار سمت", "callback_data": "admin_positions"}],
         ]
         if self.config.apk_upload_enabled:
             rows.append(
@@ -687,8 +762,37 @@ class Bot:
             rows.append(
                 [{"text": "↩️ بازگردانی نسخه قبل", "callback_data": "admin_rollback"}]
             )
+        if self.config.platform == "telegram":
+            rows.append(
+                [{"text": "🇮🇷 تست ورود از ایران", "callback_data": "admin_iran_check"}]
+            )
         rows.append([{"text": "🏠 منوی اصلی", "callback_data": "menu"}])
         return rows
+
+    def start_iran_check(self, chat_id: object, user_id: str) -> None:
+        if self.config.platform != "telegram":
+            self.send(chat_id, "این ابزار فقط در ربات تلگرام فعال است.", self.admin_menu())
+            return
+        if not self.iran_check_lock.acquire(blocking=False):
+            self.send(chat_id, "⏳ یک تست ایران در حال اجراست؛ نتیجه همان تست ارسال می‌شود.")
+            return
+        self.audit(user_id, "iran_route_check_started")
+        self.send(chat_id, "⏳ تست مسیرهای ورود و دانلود از نودهای واقعی ایران شروع شد…")
+
+        def worker() -> None:
+            try:
+                report = format_iran_route_report(self.config.site_url)
+                self.send(chat_id, report, self.admin_menu())
+            except Exception as error:
+                self.send(
+                    chat_id,
+                    f"❌ اجرای تست ایران ممکن نشد: {type(error).__name__}\nهیچ نتیجه خارجی به‌عنوان نتیجه ایران گزارش نشد.",
+                    self.admin_menu(),
+                )
+            finally:
+                self.iran_check_lock.release()
+
+        threading.Thread(target=worker, name="hamkare-iran-check", daemon=True).start()
 
     def session(self, user_id: str, state: str, first: str = "", last: str = "", nid: str = "") -> None:
         self.connection.execute(
@@ -729,7 +833,7 @@ class Bot:
         if not self.is_registered(user_id) and not self.is_admin(user_id):
             self.send(
                 chat_id,
-                "برای دریافت دفترچه استخدام ابتدا ثبت‌نام را تکمیل کنید.",
+                "برای دریافت اپلیکیشن ابتدا ثبت‌نام را تکمیل کنید.",
                 [[{"text": "📝 شروع ثبت‌نام", "callback_data": "register"}], *self.flow_keyboard()],
             )
             return
@@ -742,8 +846,8 @@ class Bot:
         else:
             self.send(
                 chat_id,
-                "دفترچه رسمی استخدام از دکمه زیر در دسترس است.",
-                [[{"text": "📥 دریافت دفترچه استخدام", "url": self.config.download_url}],
+                "نسخه رسمی اپلیکیشن از دکمه زیر در دسترس است.",
+                [[{"text": "📥 دانلود امن اپلیکیشن", "url": self.config.download_url}],
                  [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
             )
 
@@ -869,17 +973,6 @@ class Bot:
             self.begin_registration(chat_id, user_id)
         elif action == "download":
             self.download(chat_id, user_id)
-        elif action == "positions":
-            self.show_positions(chat_id)
-        elif re.fullmatch(r"position_[0-3]", action):
-            index = int(action.rsplit("_", 1)[1])
-            title, description = self.positions()[index]
-            self.send(
-                chat_id,
-                f"💼 {title}\n\n{description}",
-                [[{"text": "📝 ثبت درخواست برای این سمت", "callback_data": "register"}],
-                 [{"text": "↩️ بازگشت به سمت‌ها", "callback_data": "positions"}]],
-            )
         elif action == "privacy":
             self.send(
                 chat_id,
@@ -909,29 +1002,13 @@ class Bot:
                 "این لینک ثابت است؛ تعویض فایل APK نباید لینک عمومی را تغییر دهد.",
                 self.admin_menu(),
             )
+        elif action == "admin_iran_check":
+            self.start_iran_check(chat_id, user_id)
         elif action == "admin_toggle_pause":
             new_value = "0" if self.paused() else "1"
             self.set_setting("registrations_paused", new_value)
             self.audit(user_id, "toggle_registration_pause", new_value)
             self.show_admin_panel(chat_id, user_id)
-        elif action == "admin_positions":
-            current = "\n".join(
-                f"{index + 1}. {title} — {description}"
-                for index, (title, description) in enumerate(self.positions())
-            )
-            self.send(
-                chat_id,
-                f"چهار سمت فعال:\n\n{current}",
-                [[{"text": "✏️ ویرایش چهار سمت", "callback_data": "admin_positions_edit"}],
-                 [{"text": "↩️ پنل مدیریت", "callback_data": "admin_panel"}]],
-            )
-        elif action == "admin_positions_edit":
-            self.set_admin_state(user_id, "awaiting_positions")
-            self.send(
-                chat_id,
-                "دقیقاً چهار خط بفرستید. قالب هر خط:\nعنوان | توضیح کوتاه\n\nنمونه:\nپشتیبانی | پاسخ‌گویی به متقاضیان",
-                [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
-            )
         elif action == "admin_upload":
             if not can_upload_apk(
                 self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
@@ -990,8 +1067,8 @@ class Bot:
         self.audit(user_id, "registration_completed")
         self.send(
             chat_id,
-            "✅ مشخصات شما ثبت شد. اکنون می‌توانید دفترچه استخدام را دریافت کنید.",
-            [[{"text": "📥 دریافت دفترچه استخدام", "url": self.config.download_url}],
+            "✅ مشخصات شما ثبت شد. اکنون می‌توانید اپلیکیشن را دریافت کنید.",
+            [[{"text": "📥 دریافت اپلیکیشن", "url": self.config.download_url}],
              [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
         )
 
@@ -1176,7 +1253,7 @@ class Bot:
                 chat_id,
                 f"✅ فایل APK با موفقیت جایگزین شد.\n"
                 f"اندازه: {size / 1024 / 1024:.2f} MB\nSHA-256: {digest[:16]}…\n"
-                f"امضای release APK: تأیید شد\nتطبیق فایل با لینک عمومی: {public_text}\n\n"
+                f"امضای release APK: تأیید شد\nانتشار GitHub و تطبیق لینک عمومی: {public_text}\n\n"
                 f"لینک عمومی بدون تغییر باقی ماند:\n{self.config.download_url}",
                 self.admin_menu(),
             )
@@ -1383,37 +1460,15 @@ class Bot:
             self.clear_sessions(user_id)
             self.show_admin_panel(chat_id, user_id)
             return
+        if command == "/irancheck" and self.is_admin(user_id):
+            self.start_iran_check(chat_id, user_id)
+            return
         if command in {"/stop", "/cancel"}:
             self.clear_sessions(user_id)
             self.send(chat_id, "فرایند جاری متوقف شد.", self.user_menu(user_id))
             return
         if command == "/privacy":
             self.send(chat_id, "متن کامل حریم خصوصی:", [[{"text": "مشاهده", "url": self.config.privacy_url}]])
-            return
-        if self.is_admin(user_id) and self.admin_state(user_id) == "awaiting_positions":
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            positions = []
-            for line in lines:
-                parts = [part.strip() for part in line.split("|", 1)]
-                if len(parts) != 2 or not 2 <= len(parts[0]) <= 32 or not 2 <= len(parts[1]) <= 160:
-                    positions = []
-                    break
-                positions.append({"title": parts[0], "description": parts[1]})
-            if len(positions) != 4:
-                self.send(
-                    chat_id,
-                    "قالب معتبر نیست. دقیقاً چهار خط با «عنوان | توضیح کوتاه» بفرستید.",
-                    [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
-                )
-                return
-            self.set_setting("job_positions", json.dumps(positions, ensure_ascii=False))
-            self.connection.execute(
-                "DELETE FROM admin_sessions WHERE platform=? AND user_id=?",
-                (self.config.platform, user_id),
-            )
-            self.connection.commit()
-            self.audit(user_id, "job_positions_updated")
-            self.send(chat_id, "✅ چهار سمت جدید ذخیره و برای کاربران فعال شد.", self.admin_menu())
             return
         row = self.session_row(user_id)
         if row is None:
