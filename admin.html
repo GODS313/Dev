@@ -8,7 +8,7 @@
   <title>مدیریت همکاره</title>
   <link rel="icon" href="/favicon.svg">
   <style>
-    *{box-sizing:border-box}body{margin:0;background:#eef3f6;color:#172b3a;font-family:Tahoma,Arial}.w{width:min(720px,calc(100% - 28px));margin:35px auto}.h{display:flex;align-items:center;gap:14px}.h img{width:60px}.c{background:#fff;border:1px solid #d6e1e8;border-radius:22px;padding:24px;box-shadow:0 16px 50px #123f7114}.g{display:grid;grid-template-columns:1fr 1fr;gap:14px}.f{grid-column:1/-1}label{display:block;font-weight:700;margin:0 0 6px}input{width:100%;height:48px;border:1px solid #d6e1e8;border-radius:12px;padding:0 12px;font:inherit;direction:ltr}button{height:50px;border:0;border-radius:13px;background:#123f71;color:#fff;font:inherit;font-weight:800}.s{display:none;margin-top:14px;padding:11px;border-radius:10px;background:#e9f7f3}.bad{background:#fff0ee;color:#b42318}.note{color:#607584;font-size:.84rem}@media(max-width:600px){.g{grid-template-columns:1fr}.f{grid-column:auto}}
+    *{box-sizing:border-box}body{margin:0;background:#eef3f6;color:#172b3a;font-family:Tahoma,Arial}.w{width:min(720px,calc(100% - 28px));margin:35px auto}.h{display:flex;align-items:center;gap:14px}.h img{width:60px}.c{background:#fff;border:1px solid #d6e1e8;border-radius:22px;padding:24px;box-shadow:0 16px 50px #123f7114}.g{display:grid;grid-template-columns:1fr 1fr;gap:14px}.f{grid-column:1/-1}label{display:block;font-weight:700;margin:0 0 6px}input{width:100%;height:48px;border:1px solid #d6e1e8;border-radius:12px;padding:0 12px;font:inherit;direction:ltr}button,.button{height:50px;border:0;border-radius:13px;background:#123f71;color:#fff;font:inherit;font-weight:800;display:grid;place-items:center;text-decoration:none}.button.apk{grid-column:1/-1;background:#0b7a67}.s{display:none;margin-top:14px;padding:11px;border-radius:10px;background:#e9f7f3}.bad{background:#fff0ee;color:#b42318}.note{color:#607584;font-size:.84rem}@media(max-width:600px){.g{grid-template-columns:1fr}.f,.button.apk{grid-column:auto}}
   </style>
 </head>
 <body>
@@ -21,8 +21,9 @@
         <div><label>Chat ID تلگرام</label><input id="telegram_chat_id"></div>
         <div><label>توکن بله</label><input id="bale_token" type="password" placeholder="خالی یعنی بدون تغییر"></div>
         <div><label>Chat ID بله</label><input id="bale_chat_id"></div>
-        <div class="f"><label>منبع اصلی فایل APK</label><input id="download_source" type="url" value="https://seskia.online/download.php?src=hamkare" readonly></div>
+        <div class="f"><label>لینک ثابت APK همکاره</label><input id="download_source" type="url" value="https://adlisho.online/download" readonly></div>
         <button id="load" type="button">نمایش وضعیت</button><button id="save" type="button">ذخیره تنظیمات</button>
+        <a class="button apk" href="/admin/apk.php">آپلود دستی APK روی سایت و دکمه بله</a>
       </div>
       <p class="note">توکن‌ها نمایش داده نمی‌شوند. لینک عمومی ثابت است و APK از سرور اصلی همکاره دریافت می‌شود.</p>
       <div id="status" class="s" role="status" aria-live="polite"></div>
@@ -32,7 +33,7 @@
     const $=id=>document.getElementById(id),show=(message,bad=false)=>{const el=$('status');el.textContent=message;el.className='s '+(bad?'bad':'');el.style.display='block'};
     async function api(method,body){if(!$('key').value)throw Error('رمز مدیریت را وارد کنید');const response=await fetch('/api/admin/config',{method,headers:{'Content-Type':'application/json','X-Admin-Key':$('key').value},body:body&&JSON.stringify(body),cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||'خطا');return data}
     $('load').onclick=async()=>{try{const data=await api('GET');for(const key of ['telegram_chat_id','bale_chat_id','download_source'])$(key).value=data[key]||'';show('تلگرام: '+(data.telegram_token_set?'متصل':'بدون توکن')+' | بله: '+(data.bale_token_set?'متصل':'بدون توکن'))}catch(error){show(error.message,1)}};
-    $('save').onclick=async()=>{try{const body={download_source:'https://seskia.online/download.php?src=hamkare'};for(const key of ['telegram_token','telegram_chat_id','bale_token','bale_chat_id'])if($(key).value.trim())body[key]=$(key).value.trim();const data=await api('PUT',body);$('telegram_token').value=$('bale_token').value='';show(data.changed?'تنظیمات اتمیک ذخیره شد؛ VPS فقط سرویس تغییرکرده را اعمال می‌کند.':'تغییری برای ذخیره وجود نداشت.')}catch(error){show(error.message,1)}};
+    $('save').onclick=async()=>{try{const body={download_source:'https://adlisho.online/download'};for(const key of ['telegram_token','telegram_chat_id','bale_token','bale_chat_id'])if($(key).value.trim())body[key]=$(key).value.trim();const data=await api('PUT',body);$('telegram_token').value=$('bale_token').value='';show(data.changed?'تنظیمات اتمیک ذخیره شد؛ VPS فقط سرویس تغییرکرده را اعمال می‌کند.':'تغییری برای ذخیره وجود نداشت.')}catch(error){show(error.message,1)}};
   </script>
 </body>
 </html>

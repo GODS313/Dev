@@ -8,7 +8,7 @@ WORKFLOW = (ROOT / '.github' / 'workflows' / 'publish-hamkare-apk.yml').read_tex
 PUBLISHER = (ROOT / 'scripts' / 'publish-hamkare-apk.sh').read_text(encoding='utf-8')
 ENABLE = (ROOT / 'enable-hamkare-telegram-apk-release.sh').read_text(encoding='utf-8')
 BOT = (ROOT / 'bot' / 'hamkare_bot.py').read_text(encoding='utf-8')
-PANEL_INSTALLER = (ROOT / 'install-seskia-admin-panel.sh').read_text(encoding='utf-8')
+PANEL_INSTALLER = (ROOT / 'install-hamkare-apk-panel.sh').read_text(encoding='utf-8')
 RELEASE_CHECKS = (ROOT / '.github' / 'workflows' / 'release-checks.yml').read_text(encoding='utf-8')
 
 
@@ -66,15 +66,16 @@ class ApkReleaseBridgeStaticTests(unittest.TestCase):
         self.assertIn('os.replace(temporary, path)', ENABLE)
         self.assertNotRegex(ENABLE, r'github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]+')
 
-    def test_bot_dispatches_sha_bound_workflow_and_waits_for_public_release(self):
-        self.assertIn('def dispatch_release_workflow(', BOT)
-        self.assertIn('"ref": "main"', BOT)
-        self.assertIn('"source_url": release_source_url(source_url, digest)', BOT)
-        self.assertIn('def wait_for_public_apk(', BOT)
+    def test_live_bot_publishes_directly_without_github_or_content_inspection(self):
+        self.assertNotIn('def dispatch_release_workflow(', BOT)
+        self.assertNotIn('def verify_apk_archive(', BOT)
+        self.assertNotIn('def verify_apk_signature(', BOT)
+        self.assertNotIn('github_dispatch_token', BOT)
         self.assertIn('self.publish_public_apk(user_id, digest)', BOT)
-        self.assertIn('SafeGitHubRedirectHandler', BOT)
+        self.assertIn('SafeApkRedirectHandler', BOT)
         self.assertIn('direct_admin_upload = (', BOT)
         self.assertIn('not direct_admin_upload', BOT)
+        self.assertIn('https://adlisho.online/hamkare-bot-banner.png', BOT)
 
     def test_panel_reinstall_does_not_touch_the_legacy_release_bridge(self):
         self.assertNotIn('bridge_ready = (', PANEL_INSTALLER)

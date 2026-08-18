@@ -1,4 +1,4 @@
-const APK_ORIGIN_URL = 'https://seskia.online/download.php?src=hamkare';
+const APK_ORIGIN_URL = 'https://adlisho.online/download.php';
 
 export async function onRequest({ request }) {
   if (!['GET', 'HEAD'].includes(request.method)) {

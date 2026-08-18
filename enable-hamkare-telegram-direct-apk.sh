@@ -17,7 +17,7 @@ APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 TELEGRAM_ENV="$APP_DIR/telegram.env"
 BALE_ENV="$APP_DIR/bale.env"
 BOT_TARGET="$APP_DIR/bot.py"
-APK_ROOT=/var/www/seskia
+APK_ROOT=/var/www/adlisho
 APK_TARGET=$APK_ROOT/app.apk
 APK_STAGE=$APK_ROOT/.hamkare-apk-staging
 BANNER_TARGET=$APK_ROOT/hamkare-bot-banner.png
@@ -96,11 +96,6 @@ for path, updates in (
         "APK_STAGE_DIR": apk_stage,
         "MAX_APK_BYTES": "20971520",
         "PUBLIC_VERIFY_ENABLED": "true",
-        "GITHUB_DISPATCH_TOKEN": "",
-        "GITHUB_REPOSITORY": "",
-        "GITHUB_WORKFLOW": "",
-        "APK_SOURCE_URL": "",
-        "RELEASE_WAIT_SECONDS": "300",
     }),
     (bale_path, {
         "DOWNLOAD_URL": public_url,

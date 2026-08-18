@@ -14,7 +14,7 @@ PRODUCTION_DOCS = {
     'README.md': (ROOT / 'README.md').read_text(encoding='utf-8'),
     'DEPLOYMENT.md': (ROOT / 'DEPLOYMENT.md').read_text(encoding='utf-8'),
 }
-ORIGIN_URL_RE = re.compile(r'https://seskia\.online/download\.php\?src=hamkare')
+ORIGIN_URL_RE = re.compile(r'https://adlisho\.online/download\.php')
 PUBLIC_URL_RE = re.compile(r'https://adlisho\.online/download')
 SYNC_TOP_LEVEL_KEYS = {
     'revision',
@@ -45,16 +45,13 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         self.assertIn('flock(lock, fcntl.LOCK_EX)', INSTALLER)
 
     def test_direct_apk_origin_does_not_drift_across_runtime(self):
-        sources = {
-            'functions/api/admin/sync.js': SYNC_API,
-            'functions/download.js': DOWNLOAD,
-        }
-        urls_by_source = {name: set(ORIGIN_URL_RE.findall(content)) for name, content in sources.items()}
-        for name, urls in urls_by_source.items():
-            self.assertEqual(len(urls), 1, f'exactly one direct APK origin is required in {name}')
-        canonical = urls_by_source['functions/api/admin/sync.js']
-        for name, urls in urls_by_source.items():
-            self.assertEqual(urls, canonical, f'direct APK origin drifted in {name}')
+        self.assertEqual(
+            set(ORIGIN_URL_RE.findall(DOWNLOAD)),
+            {'https://adlisho.online/download.php'},
+        )
+        self.assertNotIn('seskia', DOWNLOAD.lower())
+        self.assertNotIn('seskia', SYNC_API.lower())
+        self.assertIn("download_source: PUBLIC_DOWNLOAD_URL", SYNC_API)
 
     def test_public_adlisho_target_does_not_drift(self):
         sources = {

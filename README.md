@@ -49,7 +49,7 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 curl -fsSLo /tmp/deploy-apk-panel-vps.sh https://raw.githubusercontent.com/GODS313/Dev/main/deploy-apk-panel-vps.sh && sudo bash /tmp/deploy-apk-panel-vps.sh
 ```
 
-سپس از `https://seskia.online/admin.php` فایل را انتخاب کنید. پنل فایل را بدون تغییر روی `/var/www/seskia/app.apk` منتشر می‌کند و لینک ثابت Adlisho را تطبیق می‌دهد.
+سپس از `https://adlisho.online/admin/apk.php` فایل را انتخاب کنید. پنل همان فایل را بدون بازکردن، تغییر یا بررسی امضا روی `/var/www/adlisho/app.apk` منتشر می‌کند و لینک ثابت Adlisho را تطبیق می‌دهد. مسیر زنده انتشار کاملاً مستقیم و بدون واسط است.
 
 برای فعال‌کردن منوی آپلود مستقیم فقط در بات تلگرام، دستور زیر را روی VPS اجرا کنید. توکن‌های موجود بازنویسی نمی‌شوند و قبل از هر تغییر بکاپ ساخته می‌شود.
 
@@ -68,3 +68,5 @@ sudo bash deploy-hamkare-bots.sh
 شناسه‌های مدیر، توکن‌ها و گروه‌های گزارش بات‌های استخدامی در زمان نصب دریافت می‌شوند و فقط در فایل‌های env با دسترسی `0600` روی VPS قرار می‌گیرند. هر دو فایل `telegram.env` و `bale.env` همان مسیر عمومی ثابت Adlisho را دریافت می‌کنند.
 
 هیچ توکن، رمز یا کلید محرمانه‌ای داخل مخزن نگهداری نمی‌شود.
+
+تمام تصاویر عمومی سایت باید پوشیده، رسمی و متناسب با فضای اداری، شرکتی یا صنعتی ایران باشند؛ محتوای برهنه یا جنسی در دارایی‌های سایت مجاز نیست.

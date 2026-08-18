@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-const APK_PATH = '/var/www/seskia/app.apk';
+const APK_PATH = '/var/www/adlisho/app.apk';
+const APK_MAX_BYTES = 209715200;
 
 if (!is_file(APK_PATH) || is_link(APK_PATH) || !is_readable(APK_PATH)) {
     http_response_code(503);
@@ -12,7 +13,7 @@ if (!is_file(APK_PATH) || is_link(APK_PATH) || !is_readable(APK_PATH)) {
 }
 
 $size = filesize(APK_PATH);
-if ($size === false || $size <= 0 || $size > 20 * 1024 * 1024) {
+if ($size === false || $size < 1024 || $size > APK_MAX_BYTES) {
     http_response_code(503);
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');

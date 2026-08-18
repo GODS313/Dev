@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-const PANEL_CONFIG_FILE = '/var/lib/seskia/config.json';
-const PANEL_STATE_DIR = '/var/lib/seskia';
-const PANEL_APK_LIVE = '/var/www/seskia/app.apk';
-const PANEL_APK_STAGE = '/var/www/.seskia-apk-stage';
-const PANEL_APK_BACKUPS = '/var/lib/seskia/backups';
-const PANEL_APK_METADATA = '/var/lib/seskia/apk-last-deployment.json';
-const PANEL_AUDIT_LOG = '/var/lib/seskia/admin-audit.jsonl';
-const PANEL_LOGIN_RATE = '/var/lib/seskia/admin-login-rate.json';
+const PANEL_CONFIG_FILE = '/var/lib/hamkare-apk-panel/config.json';
+const PANEL_STATE_DIR = '/var/lib/hamkare-apk-panel';
+const PANEL_APK_LIVE = '/var/www/adlisho/app.apk';
+const PANEL_APK_STAGE = '/var/www/adlisho/.hamkare-apk-staging';
+const PANEL_APK_BACKUPS = '/var/lib/hamkare-apk-panel/backups';
+const PANEL_APK_METADATA = '/var/lib/hamkare-apk-panel/apk-last-deployment.json';
+const PANEL_AUDIT_LOG = '/var/lib/hamkare-apk-panel/admin-audit.jsonl';
+const PANEL_LOGIN_RATE = '/var/lib/hamkare-apk-panel/admin-login-rate.json';
 const PANEL_PUBLIC_URL = 'https://adlisho.online/download';
-const PANEL_WEBHOOK_URL = 'https://seskia.online/telegram.php';
+const PANEL_WEBHOOK_URL = 'https://adlisho.online/telegram.php';
 const PANEL_MAX_APK_BYTES = 209715200;
 const PANEL_BACKUP_LIMIT = 10;
 
@@ -24,7 +24,7 @@ function panel_boot(): void
         http_response_code(400);
         exit('HTTPS required');
     }
-    session_name('seskia_admin');
+    session_name('hamkare_apk_admin');
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
@@ -55,7 +55,7 @@ function panel_nonce(): string
 function panel_config(): array
 {
     if (!is_file(PANEL_CONFIG_FILE) || is_link(PANEL_CONFIG_FILE)) {
-        throw new RuntimeException('فایل تنظیمات Seskia پیدا نشد.');
+        throw new RuntimeException('فایل تنظیمات پنل APK همکاره پیدا نشد.');
     }
     $raw = file_get_contents(PANEL_CONFIG_FILE);
     if ($raw === false) {
@@ -610,7 +610,8 @@ function panel_public_apk_matches(string $expectedDigest): bool
         return false;
     }
     curl_setopt_array($curl, [
-        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 2,
         CURLOPT_CONNECTTIMEOUT => 15,
         CURLOPT_TIMEOUT => 180,
         CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
@@ -629,6 +630,7 @@ function panel_public_apk_matches(string $expectedDigest): bool
     $ok = curl_exec($curl);
     $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
     $type = strtolower((string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
+    $effectiveUrl = (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
     curl_close($curl);
     fflush($handle);
     fclose($handle);
@@ -640,6 +642,8 @@ function panel_public_apk_matches(string $expectedDigest): bool
         && $received <= PANEL_MAX_APK_BYTES
         && !str_contains($type, 'text/html')
         && !str_contains($type, 'application/json')
+        && parse_url($effectiveUrl, PHP_URL_SCHEME) === 'https'
+        && parse_url($effectiveUrl, PHP_URL_HOST) === 'adlisho.online'
         && is_string($digest)
         && hash_equals($expectedDigest, $digest);
 }

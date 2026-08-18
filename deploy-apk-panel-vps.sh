@@ -17,4 +17,4 @@ cleanup() { rm -rf -- "$TEMP_DIR"; }
 trap cleanup EXIT
 
 git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$TEMP_DIR/repo"
-bash "$TEMP_DIR/repo/install-seskia-admin-panel.sh"
+bash "$TEMP_DIR/repo/install-hamkare-apk-panel.sh"

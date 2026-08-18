@@ -16,9 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: PHP syntax
         run: |
-          php -l seskia-admin/admin.php
-          php -l seskia-admin/download.php
-          php -l seskia-admin/panel-lib.php
+          php -l hamkare-admin/admin.php
+          php -l hamkare-admin/download.php
+          php -l hamkare-admin/panel-lib.php
           php -l register.php
           php -l result.php
       - name: Shell syntax
@@ -26,7 +26,7 @@ jobs:
           bash -n \
             deploy-vps.sh \
             deploy-hamkare-bots.sh \
-            install-seskia-admin-panel.sh \
+            install-hamkare-apk-panel.sh \
             install-hamkare-admin-vps.sh \
             enable-hamkare-telegram-direct-apk.sh \
             enable-hamkare-telegram-apk-release.sh \

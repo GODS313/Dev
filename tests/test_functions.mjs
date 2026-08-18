@@ -68,7 +68,7 @@ test('registration rejects an oversized streamed body before JSON parsing', asyn
 test('download gateway streams the direct VPS APK with white-label headers', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    assert.equal(url, 'https://seskia.online/download.php?src=hamkare');
+    assert.equal(url, 'https://adlisho.online/download.php');
     return new Response('apk-bytes', {
       status: 200,
       headers: { 'Content-Type': 'application/octet-stream', 'Set-Cookie': 'nope=1' },
@@ -111,7 +111,7 @@ test('admin config persists one revision with one atomic D1 batch', async () => 
     headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin-secret' },
     body: JSON.stringify({
       telegram_chat_id: '-1001234567890',
-      download_source: 'https://seskia.online/download.php?src=hamkare',
+      download_source: 'https://adlisho.online/download',
     }),
   });
   const response = await onRequest({

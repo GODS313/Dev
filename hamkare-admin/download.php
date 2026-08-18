@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-const HAMKARE_APK_PATH = '/var/www/seskia/app.apk';
+const HAMKARE_APK_PATH = '/var/www/adlisho/app.apk';
 const HAMKARE_APK_MAX_BYTES = 209715200;
 
 function download_fail(int $status, string $message): never
