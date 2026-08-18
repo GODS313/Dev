@@ -46,6 +46,7 @@ REJECTED_SIGNER_CERT_DIGESTS = {
     # Public Android AOSP test key; it is not a private production identity.
     "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
 }
+BANNER_URL = "https://seskia.online/hamkare-bot-banner.png"
 
 
 def normalize(value: object) -> str:
@@ -547,6 +548,18 @@ class Bot:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         return self.api("sendMessage", payload)
 
+    def send_banner(self, chat_id: object, text: str, keyboard: list) -> dict:
+        payload = {
+            "chat_id": chat_id,
+            "photo": BANNER_URL,
+            "caption": text,
+            "reply_markup": {"inline_keyboard": keyboard},
+        }
+        try:
+            return self.api("sendPhoto", payload)
+        except Exception:
+            return self.send(chat_id, text, keyboard)
+
     def answer(self, callback_id: str, text: str = "") -> None:
         try:
             payload = {"callback_query_id": callback_id}
@@ -644,7 +657,7 @@ class Bot:
         return rows
 
     def show_menu(self, chat_id: object, user_id: str) -> None:
-        self.send(
+        self.send_banner(
             chat_id,
             f"به «{self.config.brand_name}» خوش آمدید 👋\n"
             "فرصت‌های همکاری سراسر کشور\n\nمسیر مناسب خود را انتخاب کنید:",

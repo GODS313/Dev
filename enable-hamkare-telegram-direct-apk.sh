@@ -12,6 +12,7 @@ flock -n 9 || { echo 'تنظیم دیگری هم‌زمان در حال اجرا
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
+SOURCE_BANNER="$SCRIPT_DIR/assets/hamkare-bot-banner.png"
 APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 TELEGRAM_ENV="$APP_DIR/telegram.env"
 BALE_ENV="$APP_DIR/bale.env"
@@ -19,12 +20,13 @@ BOT_TARGET="$APP_DIR/bot.py"
 APK_ROOT=/var/www/seskia
 APK_TARGET=$APK_ROOT/app.apk
 APK_STAGE=$APK_ROOT/.hamkare-apk-staging
+BANNER_TARGET=$APK_ROOT/hamkare-bot-banner.png
 PUBLIC_URL=https://adlisho.online/download
 OVERRIDE_DIR=/etc/systemd/system/hamkare-telegram.service.d
 OVERRIDE_FILE=$OVERRIDE_DIR/apk-direct.conf
 BACKUP_DIR="$(mktemp -d /var/backups/hamkare-telegram-direct-apk-XXXXXXXX)"
 
-for source in "$SOURCE_BOT" "$TELEGRAM_ENV" "$BALE_ENV" "$BOT_TARGET"; do
+for source in "$SOURCE_BOT" "$SOURCE_BANNER" "$TELEGRAM_ENV" "$BALE_ENV" "$BOT_TARGET"; do
   [[ -f "$source" && ! -L "$source" ]] || { echo "فایل معتبر پیدا نشد: $source" >&2; exit 1; }
 done
 [[ -d "$APK_ROOT" && ! -L "$APK_ROOT" && "$(realpath -e -- "$APK_ROOT")" == "$APK_ROOT" ]] || {
@@ -36,6 +38,9 @@ done
 
 cp -a "$TELEGRAM_ENV" "$BALE_ENV" "$BOT_TARGET" "$BACKUP_DIR/"
 [[ ! -f "$OVERRIDE_FILE" ]] || cp -a "$OVERRIDE_FILE" "$BACKUP_DIR/apk-direct.conf"
+[[ ! -f "$BANNER_TARGET" ]] || cp -a "$BANNER_TARGET" "$BACKUP_DIR/hamkare-bot-banner.png"
+BANNER_EXISTED=0
+[[ ! -f "$BANNER_TARGET" ]] || BANNER_EXISTED=1
 OVERRIDE_EXISTED=0
 [[ ! -f "$OVERRIDE_FILE" ]] || OVERRIDE_EXISTED=1
 INSTALL_COMPLETE=0
@@ -45,6 +50,11 @@ rollback() {
     cp -a "$BACKUP_DIR/telegram.env" "$TELEGRAM_ENV" 2>/dev/null || true
     cp -a "$BACKUP_DIR/bale.env" "$BALE_ENV" 2>/dev/null || true
     cp -a "$BACKUP_DIR/bot.py" "$BOT_TARGET" 2>/dev/null || true
+    if [[ $BANNER_EXISTED -eq 1 ]]; then
+      cp -a "$BACKUP_DIR/hamkare-bot-banner.png" "$BANNER_TARGET" 2>/dev/null || true
+    else
+      rm -f -- "$BANNER_TARGET"
+    fi
     if [[ $OVERRIDE_EXISTED -eq 1 ]]; then
       cp -a "$BACKUP_DIR/apk-direct.conf" "$OVERRIDE_FILE" 2>/dev/null || true
     else
@@ -63,6 +73,7 @@ BOT_UID="$(stat -c %u -- "$BOT_TARGET")"
 BOT_GID="$(stat -c %g -- "$BOT_TARGET")"
 BOT_MODE="$(stat -c %a -- "$BOT_TARGET")"
 install -o "$BOT_UID" -g "$BOT_GID" -m "$BOT_MODE" "$SOURCE_BOT" "$BOT_TARGET"
+install -o root -g root -m 0644 "$SOURCE_BANNER" "$BANNER_TARGET"
 install -d -o root -g root -m 0755 "$OVERRIDE_DIR"
 cat >"$OVERRIDE_FILE" <<EOF
 [Service]
