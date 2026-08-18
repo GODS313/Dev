@@ -84,7 +84,7 @@ class PermissionTests(unittest.TestCase):
                 token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
                 log_chat_id="-1001234567890",
                 admin_ids=self.admins,
-                download_url="https://adlisho.online/download.php",
+                download_url="https://adlisho.online/download",
                 site_url="https://adlisho.online",
                 support_url="https://adlisho.online/contact.html",
                 privacy_url="https://adlisho.online/privacy.html",
@@ -119,73 +119,26 @@ class PermissionTests(unittest.TestCase):
             self.assertIn("admin_panel", admin_callbacks)
             self.assertIn("admin_upload", panel_callbacks)
             self.assertIn("admin_rollback", panel_callbacks)
-            self.assertIn("admin_iran_check", panel_callbacks)
+            self.assertIn("admin_positions", panel_callbacks)
+            self.assertIn("positions", user_callbacks)
+            self.assertNotIn("https://adlisho.online", {
+                button.get("url") for row in bot.user_menu("20002") for button in row
+            })
 
-    def test_iran_check_is_admin_only_and_not_rendered_in_bale(self):
-        self.assertIn("admin_iran_check", BOT.ADMIN_ACTIONS)
-        self.assertFalse(BOT.can_access_action("admin_iran_check", "20002", self.admins))
-        with tempfile.TemporaryDirectory() as directory:
-            config = BOT.Config(
-                platform="bale",
-                token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
-                log_chat_id="-1001234567890",
-                admin_ids=self.admins,
-                download_url="https://adlisho.online/download.php",
-                site_url="https://adlisho.online",
-                support_url="https://adlisho.online/contact.html",
-                privacy_url="https://adlisho.online/privacy.html",
-                tracking_url="https://adlisho.online/result.html",
-                brand_name="همکاره",
-                database_path=Path(directory) / "bale.sqlite3",
-                apk_upload_enabled=False,
-                apk_deploy_path=None,
-                max_apk_bytes=20 * 1024 * 1024,
-            )
-            bot = BOT.Bot(config)
-            callbacks = {
-                button.get("callback_data")
-                for row in bot.admin_menu()
-                for button in row
-            }
-            self.assertNotIn("admin_iran_check", callbacks)
-
-    def test_iran_node_discovery_accepts_only_verified_ir_nodes(self):
-        payload = {
-            "nodes": {
-                "ir5.node.check-host.net": {"location": ["ir", "Iran", "Tehran"]},
-                "de1.node.check-host.net": {"location": ["de", "Germany", "Berlin"]},
-                "irfake.node.check-host.net": {"location": ["ir", "Iran", "Tehran"]},
-                "ir6.node.check-host.net": {"location": ["de", "Germany", "Berlin"]},
-            }
-        }
-        with mock.patch.object(BOT, "check_host_json", return_value=payload):
-            self.assertEqual(
-                BOT.discover_iran_nodes(),
-                {"ir5.node.check-host.net": ("Iran", "Tehran")},
-            )
-
-    def test_iran_route_check_rejects_arbitrary_hosts(self):
-        with self.assertRaisesRegex(ValueError, "restricted"):
-            BOT.check_route_from_iran("https://example.com/login", ("ir5.node.check-host.net",))
-
-    def test_iran_report_checks_all_required_entry_routes(self):
-        nodes = {"ir5.node.check-host.net": ("Iran", "Tehran")}
-        with (
-            mock.patch.object(BOT, "discover_iran_nodes", return_value=nodes),
-            mock.patch.object(
-                BOT,
-                "check_route_from_iran",
-                return_value={"ir5.node.check-host.net": "200"},
-            ) as probe,
-        ):
-            report = BOT.format_iran_route_report("https://adlisho.online")
-        self.assertEqual(probe.call_count, len(BOT.IRAN_ROUTE_PATHS))
-        for _label, path in BOT.IRAN_ROUTE_PATHS:
-            self.assertIn(path, report)
-        self.assertIn("رمز، OTP یا داده‌ای ارسال نشد", report)
+            custom_positions = [
+                {"title": f"سمت {index}", "description": f"توضیح سمت شماره {index}"}
+                for index in range(1, 5)
+            ]
+            bot.set_setting("job_positions", json.dumps(custom_positions, ensure_ascii=False))
+            self.assertEqual(bot.positions()[0], ("سمت 1", "توضیح سمت شماره 1"))
+            sent = []
+            bot.send = lambda chat_id, text, keyboard=None: sent.append((text, keyboard))
+            bot.show_positions("20002")
+            callbacks = [button["callback_data"] for row in sent[-1][1][:-1] for button in row]
+            self.assertEqual(callbacks, ["position_0", "position_1", "position_2", "position_3"])
 
     def test_bale_download_button_uses_the_canonical_adlisho_endpoint(self):
-        expected = "https://adlisho.online/download.php"
+        expected = "https://adlisho.online/download"
         with tempfile.TemporaryDirectory() as directory:
             config = BOT.Config(
                 platform="bale",
@@ -218,7 +171,7 @@ class ValidationTests(unittest.TestCase):
             token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             log_chat_id="-1001234567890",
             admin_ids=frozenset({"10001"}),
-            download_url="https://adlisho.online/download.php",
+            download_url="https://adlisho.online/download",
             site_url="https://adlisho.online",
             support_url="https://adlisho.online/contact.html",
             privacy_url="https://adlisho.online/privacy.html",
@@ -506,7 +459,7 @@ class ValidationTests(unittest.TestCase):
             "BOT_TOKEN": "1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             "LOG_CHAT_ID": "-1001234567890",
             "ADMIN_IDS": "10001",
-            "DOWNLOAD_URL": "https://adlisho.online/download.php",
+            "DOWNLOAD_URL": "https://adlisho.online/download",
             "SITE_URL": "https://adlisho.online",
             "SUPPORT_URL": "https://adlisho.online/contact.html",
             "PRIVACY_URL": "https://adlisho.online/privacy.html",

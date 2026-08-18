@@ -34,6 +34,8 @@ ADMIN_ACTIONS = {
     "admin_upload",
     "admin_toggle_pause",
     "admin_current_app",
+    "admin_positions",
+    "admin_positions_edit",
     "admin_rollback",
     "admin_rollback_confirm",
     "admin_iran_check",
@@ -60,6 +62,7 @@ REJECTED_SIGNER_CERT_DIGESTS = {
     # Public Android AOSP test key; it is not a private production identity.
     "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
 }
+BANNER_URL = "https://seskia.online/hamkare-bot-banner.png"
 
 
 def normalize(value: object) -> str:
@@ -540,8 +543,7 @@ class Config:
         apk_source_url = os.environ.get("APK_SOURCE_URL", "").strip()
         release_wait_seconds = int(os.environ.get("RELEASE_WAIT_SECONDS", "300"))
         if enabled:
-            public_url = "https://adlisho.online/download.php"
-            local_url = "https://seskia.online/download.php?src=hamkare"
+            public_url = "https://adlisho.online/download"
             if github_dispatch_token:
                 if urls["DOWNLOAD_URL"] != public_url:
                     raise ValueError("DOWNLOAD_URL must be the canonical Adlisho endpoint")
@@ -550,8 +552,8 @@ class Config:
                 if github_repository != "GODS313/Dev" or github_workflow != "publish-hamkare-apk.yml":
                     raise ValueError("GitHub release workflow configuration is invalid")
                 release_source_url(apk_source_url, "0" * 64)
-            elif platform != "bale" or urls["DOWNLOAD_URL"] != local_url:
-                raise ValueError("local APK publication is allowed only for Bale on the canonical Seskia URL")
+            elif platform != "telegram" or urls["DOWNLOAD_URL"] != public_url:
+                raise ValueError("direct APK publication is allowed only for Telegram on the canonical Adlisho URL")
             if not public_verify_enabled:
                 raise ValueError("PUBLIC_VERIFY_ENABLED must stay true for APK publication")
             if not 60 <= release_wait_seconds <= 600:
@@ -667,6 +669,18 @@ class Bot:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         return self.api("sendMessage", payload)
 
+    def send_banner(self, chat_id: object, text: str, keyboard: list) -> dict:
+        payload = {
+            "chat_id": chat_id,
+            "photo": BANNER_URL,
+            "caption": text,
+            "reply_markup": {"inline_keyboard": keyboard},
+        }
+        try:
+            return self.api("sendPhoto", payload)
+        except Exception:
+            return self.send(chat_id, text, keyboard)
+
     def answer(self, callback_id: str, text: str = "") -> None:
         try:
             payload = {"callback_query_id": callback_id}
@@ -712,15 +726,47 @@ class Bot:
     def paused(self) -> bool:
         return self.setting("registrations_paused", "0") == "1"
 
+    def positions(self) -> list[tuple[str, str]]:
+        defaults = [
+            ("پشتیبانی متقاضیان", "پاسخ‌گویی و راهنمایی متقاضیان"),
+            ("هماهنگی و عملیات", "هماهنگی فرایندها و بررسی اولیه"),
+            ("توسعه بازار", "معرفی خدمات و توسعه ارتباطات"),
+            ("نماینده استانی", "همکاری در استان محل سکونت"),
+        ]
+        try:
+            values = json.loads(self.setting("job_positions", ""))
+            if not isinstance(values, list) or len(values) != 4:
+                return defaults
+            positions = []
+            for value in values:
+                if not isinstance(value, dict):
+                    return defaults
+                title = normalize(value.get("title", ""))
+                description = normalize(value.get("description", ""))
+                if not 2 <= len(title) <= 32 or not 2 <= len(description) <= 160:
+                    return defaults
+                positions.append((title, description))
+            return positions
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return defaults
+
+    def show_positions(self, chat_id: object) -> None:
+        positions = self.positions()
+        buttons = [
+            {"text": f"💼 {title}", "callback_data": f"position_{index}"}
+            for index, (title, _description) in enumerate(positions)
+        ]
+        self.send(chat_id, "سمت موردنظر را انتخاب کنید:", [
+            [buttons[0], buttons[1]], [buttons[2], buttons[3]],
+            [{"text": "🏠 منوی اصلی", "callback_data": "menu"}],
+        ])
+
     def user_menu(self, user_id: str) -> list:
-        first_label = "📥 دریافت اپلیکیشن" if self.is_registered(user_id) else "📝 شروع ثبت‌نام"
+        first_label = "📥 دریافت دفترچه استخدام" if self.is_registered(user_id) else "📝 شروع ثبت‌نام"
         first_action = "download" if self.is_registered(user_id) else "register"
         rows = [
             [{"text": first_label, "callback_data": first_action}],
-            [
-                {"text": "🌐 وب‌سایت رسمی", "url": self.config.site_url},
-                {"text": "🔎 پیگیری درخواست", "url": self.config.tracking_url},
-            ],
+            [{"text": "💼 سمت‌ها و فرصت‌های همکاری", "callback_data": "positions"}],
             [
                 {"text": "☎️ پشتیبانی", "url": self.config.support_url},
                 {"text": "🔐 حریم خصوصی", "callback_data": "privacy"},
@@ -732,11 +778,10 @@ class Bot:
         return rows
 
     def show_menu(self, chat_id: object, user_id: str) -> None:
-        role = "مدیر" if self.is_admin(user_id) else "کاربر"
-        self.send(
+        self.send_banner(
             chat_id,
             f"به «{self.config.brand_name}» خوش آمدید 👋\n"
-            f"وضعیت ورود: {role}\n\nیکی از گزینه‌های زیر را انتخاب کنید:",
+            "فرصت‌های همکاری سراسر کشور\n\nمسیر مناسب خود را انتخاب کنید:",
             self.user_menu(user_id),
         )
 
@@ -754,6 +799,7 @@ class Bot:
                 {"text": "🔗 لینک فعلی", "callback_data": "admin_current_app"},
             ],
             [{"text": "⏸ توقف/ادامه ثبت‌نام", "callback_data": "admin_toggle_pause"}],
+            [{"text": "💼 مدیریت چهار سمت", "callback_data": "admin_positions"}],
         ]
         if self.config.apk_upload_enabled:
             rows.append(
@@ -833,7 +879,7 @@ class Bot:
         if not self.is_registered(user_id) and not self.is_admin(user_id):
             self.send(
                 chat_id,
-                "برای دریافت اپلیکیشن ابتدا ثبت‌نام را تکمیل کنید.",
+                "برای دریافت دفترچه استخدام ابتدا ثبت‌نام را تکمیل کنید.",
                 [[{"text": "📝 شروع ثبت‌نام", "callback_data": "register"}], *self.flow_keyboard()],
             )
             return
@@ -846,8 +892,8 @@ class Bot:
         else:
             self.send(
                 chat_id,
-                "نسخه رسمی اپلیکیشن از دکمه زیر در دسترس است.",
-                [[{"text": "📥 دانلود امن اپلیکیشن", "url": self.config.download_url}],
+                "دفترچه رسمی استخدام از دکمه زیر در دسترس است.",
+                [[{"text": "📥 دریافت دفترچه استخدام", "url": self.config.download_url}],
                  [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
             )
 
@@ -973,6 +1019,17 @@ class Bot:
             self.begin_registration(chat_id, user_id)
         elif action == "download":
             self.download(chat_id, user_id)
+        elif action == "positions":
+            self.show_positions(chat_id)
+        elif re.fullmatch(r"position_[0-3]", action):
+            index = int(action.rsplit("_", 1)[1])
+            title, description = self.positions()[index]
+            self.send(
+                chat_id,
+                f"💼 {title}\n\n{description}",
+                [[{"text": "📝 ثبت درخواست برای این سمت", "callback_data": "register"}],
+                 [{"text": "↩️ بازگشت به سمت‌ها", "callback_data": "positions"}]],
+            )
         elif action == "privacy":
             self.send(
                 chat_id,
@@ -1009,6 +1066,24 @@ class Bot:
             self.set_setting("registrations_paused", new_value)
             self.audit(user_id, "toggle_registration_pause", new_value)
             self.show_admin_panel(chat_id, user_id)
+        elif action == "admin_positions":
+            current = "\n".join(
+                f"{index + 1}. {title} — {description}"
+                for index, (title, description) in enumerate(self.positions())
+            )
+            self.send(
+                chat_id,
+                f"چهار سمت فعال:\n\n{current}",
+                [[{"text": "✏️ ویرایش چهار سمت", "callback_data": "admin_positions_edit"}],
+                 [{"text": "↩️ پنل مدیریت", "callback_data": "admin_panel"}]],
+            )
+        elif action == "admin_positions_edit":
+            self.set_admin_state(user_id, "awaiting_positions")
+            self.send(
+                chat_id,
+                "دقیقاً چهار خط بفرستید. قالب هر خط:\nعنوان | توضیح کوتاه\n\nنمونه:\nپشتیبانی | پاسخ‌گویی به متقاضیان",
+                [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
+            )
         elif action == "admin_upload":
             if not can_upload_apk(
                 self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
@@ -1067,8 +1142,8 @@ class Bot:
         self.audit(user_id, "registration_completed")
         self.send(
             chat_id,
-            "✅ مشخصات شما ثبت شد. اکنون می‌توانید اپلیکیشن را دریافت کنید.",
-            [[{"text": "📥 دریافت اپلیکیشن", "url": self.config.download_url}],
+            "✅ مشخصات شما ثبت شد. اکنون می‌توانید دفترچه استخدام را دریافت کنید.",
+            [[{"text": "📥 دریافت دفترچه استخدام", "url": self.config.download_url}],
              [{"text": "🏠 منوی اصلی", "callback_data": "menu"}]],
         )
 
@@ -1253,7 +1328,7 @@ class Bot:
                 chat_id,
                 f"✅ فایل APK با موفقیت جایگزین شد.\n"
                 f"اندازه: {size / 1024 / 1024:.2f} MB\nSHA-256: {digest[:16]}…\n"
-                f"امضای release APK: تأیید شد\nانتشار GitHub و تطبیق لینک عمومی: {public_text}\n\n"
+                f"امضای release APK: تأیید شد\nتطبیق فایل با لینک عمومی: {public_text}\n\n"
                 f"لینک عمومی بدون تغییر باقی ماند:\n{self.config.download_url}",
                 self.admin_menu(),
             )
@@ -1469,6 +1544,31 @@ class Bot:
             return
         if command == "/privacy":
             self.send(chat_id, "متن کامل حریم خصوصی:", [[{"text": "مشاهده", "url": self.config.privacy_url}]])
+            return
+        if self.is_admin(user_id) and self.admin_state(user_id) == "awaiting_positions":
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            positions = []
+            for line in lines:
+                parts = [part.strip() for part in line.split("|", 1)]
+                if len(parts) != 2 or not 2 <= len(parts[0]) <= 32 or not 2 <= len(parts[1]) <= 160:
+                    positions = []
+                    break
+                positions.append({"title": parts[0], "description": parts[1]})
+            if len(positions) != 4:
+                self.send(
+                    chat_id,
+                    "قالب معتبر نیست. دقیقاً چهار خط با «عنوان | توضیح کوتاه» بفرستید.",
+                    [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
+                )
+                return
+            self.set_setting("job_positions", json.dumps(positions, ensure_ascii=False))
+            self.connection.execute(
+                "DELETE FROM admin_sessions WHERE platform=? AND user_id=?",
+                (self.config.platform, user_id),
+            )
+            self.connection.commit()
+            self.audit(user_id, "job_positions_updated")
+            self.send(chat_id, "✅ چهار سمت جدید ذخیره و برای کاربران فعال شد.", self.admin_menu())
             return
         row = self.session_row(user_id)
         if row is None:
