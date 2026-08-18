@@ -147,7 +147,7 @@ if ($authenticated) {
     <section class="hero">
       <h1>کنترل مرکزی APK و گزارش تلگرام</h1>
       <p>توکن بات مخصوص آپلود، چت گزارش و فایل اپلیکیشن را از همین صفحه تغییر بده.</p>
-      <div class="badges"><span class="badge">بله: بدون تغییر</span><span class="badge">APK: بکاپ و rollback</span><span class="badge">توکن: خارج از مخزن</span><span class="badge">لینک ثابت: Adlisho</span></div>
+      <div class="badges"><span class="badge">بله: لینک ثابت</span><span class="badge">APK: بدون بررسی امضا</span><span class="badge">انتشار: بکاپ و rollback</span><span class="badge">لینک ثابت: Adlisho</span></div>
       <?php if ($status): ?>
       <div class="stats">
         <div class="stat"><b><?= h($status['token_masked']) ?></b><span>توکن بات آپلود</span></div>
@@ -176,15 +176,14 @@ if ($authenticated) {
       </section>
 
       <section class="card">
-        <h2>آپلود نسخه جدید APK</h2>
-        <p class="lead">ساختار ZIP، امضای release و تطبیق آن با گواهی رسمی، اندازه و SHA-256 قبل از انتشار بررسی می‌شوند.</p>
+        <h2>آپلود دستی APK توسط مدیر</h2>
+        <p class="lead">فایل دقیقاً بدون بازکردن، تغییر یا بررسی امضا جایگزین می‌شود. فقط نام ‎.apk، محدوده حجم و تطبیق SHA-256 لینک عمومی کنترل می‌شود.</p>
         <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="upload_apk"><input type="hidden" name="MAX_FILE_SIZE" value="209715200">
-          <div class="field"><label for="apk_file">فایل APK امضاشده، حداکثر ۲۰۰ MB</label><input id="apk_file" name="apk_file" type="file" accept=".apk,application/vnd.android.package-archive" required></div>
-          <div class="actions"><button class="button gold" type="submit">اعتبارسنجی و انتشار</button></div>
+          <div class="field"><label for="apk_file">فایل APK، حداکثر ۲۰۰ MB</label><input id="apk_file" name="apk_file" type="file" accept=".apk,application/vnd.android.package-archive" required></div>
+          <div class="actions"><button class="button gold" type="submit">بکاپ و انتشار همین فایل</button></div>
         </form>
         <div class="safety"><b>لینک ثابت:</b><span class="mono"><?= h($status['public_url']) ?></span></div>
-        <p class="hint mono">Release signer: <?= h($status['apk_signer_masked']) ?></p>
         <?php if ($status['live_sha256']): ?><p class="hint mono">SHA-256 فعلی: <?= h($status['live_sha256']) ?></p><?php endif; ?>
       </section>
 

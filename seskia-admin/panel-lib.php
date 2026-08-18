@@ -14,7 +14,6 @@ const PANEL_PUBLIC_URL = 'https://adlisho.online/download';
 const PANEL_WEBHOOK_URL = 'https://seskia.online/telegram.php';
 const PANEL_MAX_APK_BYTES = 209715200;
 const PANEL_BACKUP_LIMIT = 10;
-const PANEL_AOSP_TEST_CERT = 'a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc';
 
 function panel_boot(): void
 {
@@ -77,7 +76,6 @@ function panel_config(): array
     $config['webhook_secret'] = (string) ($config['webhook_secret'] ?? '');
     $config['apk_name'] = (string) ($config['apk_name'] ?? 'hamkare.apk');
     $config['apk_filename_regex'] = (string) ($config['apk_filename_regex'] ?? '/\.apk$/i');
-    $config['apk_signer_sha256'] = strtolower((string) ($config['apk_signer_sha256'] ?? ''));
     return $config;
 }
 
@@ -519,76 +517,14 @@ function panel_notify(string $message): void
     }
 }
 
-function panel_run(array $arguments): array
-{
-    if (!function_exists('exec')) {
-        throw new RuntimeException('اجرای ابزار اعتبارسنجی روی PHP غیرفعال است.');
-    }
-    $command = implode(' ', array_map('escapeshellarg', $arguments)) . ' 2>&1';
-    $lines = [];
-    $code = 0;
-    exec($command, $lines, $code);
-    return [$code, implode("\n", $lines)];
-}
-
 function panel_validate_apk(string $path): array
 {
     if (!is_file($path) || is_link($path)) {
-        throw new InvalidArgumentException('فایل APK معتبر پیدا نشد.');
+        throw new InvalidArgumentException('فایل APK پیدا نشد.');
     }
     $size = filesize($path);
     if ($size === false || $size < 1024 || $size > PANEL_MAX_APK_BYTES) {
         throw new InvalidArgumentException('اندازه APK باید بین ۱ کیلوبایت و ۲۰۰ مگابایت باشد.');
-    }
-    $handle = fopen($path, 'rb');
-    if ($handle === false || fread($handle, 4) !== "PK\x03\x04") {
-        if (is_resource($handle)) {
-            fclose($handle);
-        }
-        throw new InvalidArgumentException('ساختار اولیه APK معتبر نیست.');
-    }
-    fclose($handle);
-    if (!class_exists('ZipArchive')) {
-        throw new RuntimeException('افزونه PHP ZipArchive نصب نیست.');
-    }
-    $zip = new ZipArchive();
-    if ($zip->open($path, ZipArchive::RDONLY) !== true) {
-        throw new InvalidArgumentException('بازکردن آرشیو APK ناموفق بود.');
-    }
-    $hasManifest = $zip->locateName('AndroidManifest.xml', ZipArchive::FL_NOCASE) !== false;
-    $hasDex = $zip->locateName('classes.dex', ZipArchive::FL_NOCASE) !== false;
-    $zip->close();
-    if (!$hasManifest || !$hasDex) {
-        throw new InvalidArgumentException('APK فاقد Manifest یا classes.dex است.');
-    }
-    [$zipCode] = panel_run(['/usr/bin/unzip', '-tqq', $path]);
-    if ($zipCode !== 0) {
-        throw new InvalidArgumentException('آرشیو APK خراب یا دارای ورودی رمزگذاری‌شده است.');
-    }
-    [$signCode, $signOutput] = panel_run([
-        '/usr/bin/apksigner',
-        'verify',
-        '--verbose',
-        '--print-certs',
-        $path,
-    ]);
-    if ($signCode !== 0) {
-        throw new InvalidArgumentException('امضای دیجیتال APK معتبر نیست.');
-    }
-    preg_match_all('/certificate SHA-256 digest:\s*([0-9a-f]{64})/i', $signOutput, $matches);
-    $certificates = array_map('strtolower', $matches[1] ?? []);
-    if (!$certificates) {
-        throw new InvalidArgumentException('گواهی امضاکننده APK قابل تشخیص نیست.');
-    }
-    if (in_array(PANEL_AOSP_TEST_CERT, $certificates, true)) {
-        throw new InvalidArgumentException('APK با کلید عمومی تست Android امضا شده و قابل انتشار نیست.');
-    }
-    $trustedSigner = (string) panel_config()['apk_signer_sha256'];
-    if (!preg_match('/^[0-9a-f]{64}$/D', $trustedSigner)) {
-        throw new RuntimeException('گواهی امضای مورد اعتماد APK در config تنظیم نشده است.');
-    }
-    if (!in_array($trustedSigner, $certificates, true)) {
-        throw new InvalidArgumentException('گواهی امضای APK با نسخه رسمی فعلی یکسان نیست.');
     }
     $digest = hash_file('sha256', $path);
     if (!is_string($digest)) {
@@ -597,7 +533,6 @@ function panel_validate_apk(string $path): array
     return [
         'size' => (int) $size,
         'sha256' => $digest,
-        'certificate_sha256' => $certificates[0],
     ];
 }
 
@@ -807,11 +742,11 @@ function panel_publish_upload(array $upload): array
         }
         try {
             panel_write_json(PANEL_APK_METADATA, [
-                'source' => 'secure-admin-panel',
+                'source' => 'admin-panel-opaque-upload',
                 'published_at' => gmdate('c'),
                 'size' => $validation['size'],
                 'sha256' => $validation['sha256'],
-                'certificate_sha256' => $validation['certificate_sha256'],
+                'validation_mode' => 'opaque-bytes',
             ], 0600);
         } catch (Throwable $metadataError) {
             $restored = panel_restore_rejected($validation['sha256'], $previousBackup);
@@ -887,11 +822,11 @@ function panel_rollback_latest(): array
         }
         try {
             panel_write_json(PANEL_APK_METADATA, [
-                'source' => 'secure-admin-panel-rollback',
+                'source' => 'admin-panel-opaque-rollback',
                 'published_at' => gmdate('c'),
                 'size' => $validation['size'],
                 'sha256' => $validation['sha256'],
-                'certificate_sha256' => $validation['certificate_sha256'],
+                'validation_mode' => 'opaque-bytes',
             ], 0600);
         } catch (Throwable $metadataError) {
             $restored = panel_restore_rejected($validation['sha256'], $currentBackup);
@@ -954,9 +889,6 @@ function panel_status(): array
         'admin_chat_ids' => $config['admin_chat_ids'],
         'chat_ids' => $config['chat_ids'],
         'apk_channel_ids' => $config['apk_channel_ids'],
-        'apk_signer_masked' => $config['apk_signer_sha256'] !== ''
-            ? substr($config['apk_signer_sha256'], 0, 12) . '…'
-            : 'تنظیم نشده',
         'live_size' => is_int($liveSize) ? $liveSize : 0,
         'live_sha256' => is_string($liveDigest) ? $liveDigest : '',
         'metadata' => $metadata,

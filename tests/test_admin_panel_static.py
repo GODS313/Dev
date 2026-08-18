@@ -15,7 +15,7 @@ class AdminPanelStaticTests(unittest.TestCase):
     def test_bale_runtime_is_outside_the_admin_installer_scope(self):
         self.assertNotRegex(INSTALLER.lower(), r"/[^\n]*(bale|بله)")
         self.assertNotIn("hamkare-bale.service", INSTALLER)
-        self.assertIn("hamkare-telegram.service", INSTALLER)
+        self.assertNotIn("hamkare-telegram.service", INSTALLER)
 
     def test_recruitment_bots_cannot_publish_apks(self):
         self.assertNotIn("APK_UPLOAD_ENABLED=true", BOT_INSTALLER)
@@ -32,13 +32,17 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("panel_require_csrf", ADMIN)
         self.assertIn("admin_auth_version", LIB)
 
-    def test_apk_pipeline_has_release_guards_and_atomic_publish(self):
-        for expected in (
+    def test_apk_pipeline_treats_upload_as_opaque_and_publishes_atomically(self):
+        for forbidden in (
             "apksigner",
             "unzip",
+            "ZipArchive",
             "PANEL_AOSP_TEST_CERT",
             "apk_signer_sha256",
-            "گواهی امضای APK با نسخه رسمی فعلی یکسان نیست",
+            "certificate_sha256",
+        ):
+            self.assertNotIn(forbidden, LIB)
+        for expected in (
             "panel_assert_apk_paths",
             "is_link(PANEL_APK_LIVE)",
             "hash_file('sha256'",
@@ -47,8 +51,11 @@ class AdminPanelStaticTests(unittest.TestCase):
             "panel_public_apk_matches",
             "panel_restore_rejected",
             "$metadataError",
+            "'validation_mode' => 'opaque-bytes'",
         ):
             self.assertIn(expected, LIB)
+        self.assertIn('enctype="multipart/form-data"', ADMIN)
+        self.assertIn('بدون بازکردن، تغییر یا بررسی امضا', ADMIN)
 
     def test_existing_webhook_and_canonical_download_are_reused(self):
         self.assertIn("https://seskia.online/telegram.php", LIB)
@@ -92,10 +99,11 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("os.fchown", INSTALLER)
         self.assertNotIn('chown www-data:www-data "$CONFIG_FILE"', INSTALLER)
 
-    def test_existing_recruitment_telegram_uploader_is_disabled_without_secrets_in_logs(self):
-        self.assertIn('TELEGRAM_ENV=/opt/hamkare-bots/telegram.env', INSTALLER)
-        self.assertIn('"APK_UPLOAD_ENABLED": "false"', INSTALLER)
-        self.assertNotIn("print(lines)", INSTALLER)
+    def test_installer_does_not_mutate_recruitment_bot_settings(self):
+        self.assertNotIn('TELEGRAM_ENV=', INSTALLER)
+        self.assertNotIn('telegram.env', INSTALLER)
+        self.assertNotIn('APK_UPLOAD_ENABLED', INSTALLER)
+        self.assertNotIn('GITHUB_DISPATCH_TOKEN', INSTALLER)
 
 
 if __name__ == "__main__":

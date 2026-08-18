@@ -76,12 +76,11 @@ class ApkReleaseBridgeStaticTests(unittest.TestCase):
         self.assertIn('direct_admin_upload = (', BOT)
         self.assertIn('not direct_admin_upload', BOT)
 
-    def test_panel_reinstall_preserves_only_a_complete_bridge(self):
-        self.assertIn('bridge_ready = (', PANEL_INSTALLER)
-        self.assertIn('current.get("GITHUB_REPOSITORY") == "GODS313/Dev"', PANEL_INSTALLER)
-        self.assertIn('current.get("GITHUB_WORKFLOW") == "publish-hamkare-apk.yml"', PANEL_INSTALLER)
-        self.assertIn('"APK_UPLOAD_ENABLED": "true"', PANEL_INSTALLER)
-        self.assertIn('"APK_UPLOAD_ENABLED": "false"', PANEL_INSTALLER)
+    def test_panel_reinstall_does_not_touch_the_legacy_release_bridge(self):
+        self.assertNotIn('bridge_ready = (', PANEL_INSTALLER)
+        self.assertNotIn('telegram.env', PANEL_INSTALLER)
+        self.assertNotIn('GITHUB_DISPATCH_TOKEN', PANEL_INSTALLER)
+        self.assertNotIn('APK_UPLOAD_ENABLED', PANEL_INSTALLER)
 
     def test_release_ci_syntax_checks_every_bridge_shell_file(self):
         self.assertIn('enable-hamkare-telegram-apk-release.sh', RELEASE_CHECKS)
