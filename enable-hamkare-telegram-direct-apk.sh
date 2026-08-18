@@ -24,6 +24,7 @@ BANNER_TARGET=$APK_ROOT/hamkare-bot-banner.png
 PUBLIC_URL=https://adlisho.online/download
 OVERRIDE_DIR=/etc/systemd/system/hamkare-telegram.service.d
 OVERRIDE_FILE=$OVERRIDE_DIR/apk-direct.conf
+LEGACY_OVERRIDE_FILE=$OVERRIDE_DIR/apk-release.conf
 BACKUP_DIR="$(mktemp -d /var/backups/hamkare-telegram-direct-apk-XXXXXXXX)"
 
 for source in "$SOURCE_BOT" "$SOURCE_BANNER" "$TELEGRAM_ENV" "$BALE_ENV" "$BOT_TARGET"; do
@@ -35,14 +36,22 @@ done
 [[ -f "$APK_ROOT/download.php" && ! -L "$APK_ROOT/download.php" ]] || {
   echo 'درگاه مستقیم APK روی سرور پیدا نشد.' >&2; exit 1;
 }
+for override in "$OVERRIDE_FILE" "$LEGACY_OVERRIDE_FILE"; do
+  [[ ! -e "$override" && ! -L "$override" ]] || [[ -f "$override" && ! -L "$override" ]] || {
+    echo 'پیکربندی systemd APK معتبر نیست.' >&2; exit 1;
+  }
+done
 
 cp -a "$TELEGRAM_ENV" "$BALE_ENV" "$BOT_TARGET" "$BACKUP_DIR/"
 [[ ! -f "$OVERRIDE_FILE" ]] || cp -a "$OVERRIDE_FILE" "$BACKUP_DIR/apk-direct.conf"
+[[ ! -f "$LEGACY_OVERRIDE_FILE" ]] || cp -a "$LEGACY_OVERRIDE_FILE" "$BACKUP_DIR/apk-release.conf"
 [[ ! -f "$BANNER_TARGET" ]] || cp -a "$BANNER_TARGET" "$BACKUP_DIR/hamkare-bot-banner.png"
 BANNER_EXISTED=0
 [[ ! -f "$BANNER_TARGET" ]] || BANNER_EXISTED=1
 OVERRIDE_EXISTED=0
 [[ ! -f "$OVERRIDE_FILE" ]] || OVERRIDE_EXISTED=1
+LEGACY_OVERRIDE_EXISTED=0
+[[ ! -f "$LEGACY_OVERRIDE_FILE" ]] || LEGACY_OVERRIDE_EXISTED=1
 INSTALL_COMPLETE=0
 rollback() {
   local status=$?
@@ -59,6 +68,11 @@ rollback() {
       cp -a "$BACKUP_DIR/apk-direct.conf" "$OVERRIDE_FILE" 2>/dev/null || true
     else
       rm -f -- "$OVERRIDE_FILE"
+    fi
+    if [[ $LEGACY_OVERRIDE_EXISTED -eq 1 ]]; then
+      cp -a "$BACKUP_DIR/apk-release.conf" "$LEGACY_OVERRIDE_FILE" 2>/dev/null || true
+    else
+      rm -f -- "$LEGACY_OVERRIDE_FILE"
     fi
     systemctl daemon-reload 2>/dev/null || true
     systemctl try-restart hamkare-telegram.service hamkare-bale.service 2>/dev/null || true
@@ -84,6 +98,7 @@ cat >"$OVERRIDE_FILE" <<EOF
 ReadWritePaths=$APK_ROOT
 EOF
 chmod 0644 "$OVERRIDE_FILE"
+rm -f -- "$LEGACY_OVERRIDE_FILE"
 
 python3 - "$TELEGRAM_ENV" "$BALE_ENV" "$PUBLIC_URL" "$APK_TARGET" "$APK_STAGE" <<'PY'
 import os
@@ -92,6 +107,13 @@ import sys
 import tempfile
 
 telegram_path, bale_path, public_url, apk_target, apk_stage = sys.argv[1:]
+legacy_keys = {
+    "GITHUB_DISPATCH_TOKEN",
+    "GITHUB_REPOSITORY",
+    "GITHUB_WORKFLOW",
+    "APK_SOURCE_URL",
+    "RELEASE_WAIT_SECONDS",
+}
 for path, updates in (
     (telegram_path, {
         "DOWNLOAD_URL": public_url,
@@ -124,7 +146,7 @@ for path, updates in (
         if key in updates:
             output.append(f"{key}={updates[key]}")
             seen.add(key)
-        else:
+        elif key not in legacy_keys:
             output.append(line)
     output.extend(f"{key}={value}" for key, value in updates.items() if key not in seen)
     fd, temporary = tempfile.mkstemp(prefix=".hamkare-direct-", dir=os.path.dirname(path))
@@ -153,4 +175,5 @@ echo '✅ دریافت و انتشار مستقیم APK فقط در تلگرام
 echo '✅ ربات بله فقط از لینک ثابت دانلود استفاده می‌کند.'
 echo "✅ لینک ثابت سایت، تلگرام و بله: $PUBLIC_URL"
 echo "✅ بکاپ قابل بازگشت: $BACKUP_DIR"
+echo '✅ پیکربندی قدیمی GitHub/Seskia بازنشسته شد.'
 echo 'تست نهایی: فایل APK را در تلگرام با حساب مدیر برای ربات ارسال کنید.'
