@@ -19,6 +19,8 @@ jobs:
           php -l seskia-admin/admin.php
           php -l seskia-admin/download.php
           php -l seskia-admin/panel-lib.php
+          php -l register.php
+          php -l result.php
       - name: Shell syntax
         run: |
           bash -n \
