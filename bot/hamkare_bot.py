@@ -1232,8 +1232,8 @@ class Bot:
             if received != declared_size:
                 raise ValueError("اندازه واقعی فایل با اطلاعات تلگرام یکسان نیست.")
             temporary_path = Path(temporary_name)
-            size, digest = verify_apk_archive(temporary_path)
-            verify_apk_signature(temporary_path)
+            size = temporary_path.stat().st_size
+            digest = sha256_file(temporary_path)
             backup_dir = self.config.database_path.parent / "apk-backups"
             backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
             lock_path = target.parent / ".hamkare-apk.lock"
@@ -1314,7 +1314,7 @@ class Bot:
                 chat_id,
                 f"✅ فایل APK با موفقیت جایگزین شد.\n"
                 f"اندازه: {size / 1024 / 1024:.2f} MB\nSHA-256: {digest[:16]}…\n"
-                f"امضای release APK: تأیید شد\nتطبیق فایل با لینک عمومی: {public_text}\n\n"
+                f"بررسی محتوای APK: غیرفعال\nتطبیق فایل با لینک عمومی: {public_text}\n\n"
                 f"لینک عمومی بدون تغییر باقی ماند:\n{self.config.download_url}",
                 self.admin_menu(),
             )
@@ -1442,9 +1442,9 @@ class Bot:
                 temporary_name = temporary.name
             temporary_path = Path(temporary_name)
             shutil.copy2(source, temporary_path)
-            size, digest = verify_apk_archive(temporary_path)
+            size = temporary_path.stat().st_size
+            digest = sha256_file(temporary_path)
             published_digest = digest
-            verify_apk_signature(temporary_path)
             lock_path = target.parent / ".hamkare-apk.lock"
             with lock_path.open("a+b") as lock_handle:
                 os.chmod(lock_path, 0o600)
