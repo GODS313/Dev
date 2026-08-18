@@ -1030,7 +1030,7 @@ class Bot:
             digest = sha256_file(temporary_path)
             backup_dir = self.config.database_path.parent / "apk-backups"
             backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-            lock_path = target.parent / ".hamkare-apk.lock"
+            lock_path = stage_dir / "publish.lock"
             with lock_path.open("a+b") as lock_handle:
                 os.chmod(lock_path, 0o600)
                 fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
@@ -1138,7 +1138,7 @@ class Bot:
         previous_backup: Path | None,
     ) -> bool:
         """Restore the prior target only when the rejected build is still live."""
-        lock_path = target.parent / ".hamkare-apk.lock"
+        lock_path = stage_dir / "publish.lock"
         temporary_name = ""
         try:
             with lock_path.open("a+b") as lock_handle:
@@ -1229,7 +1229,7 @@ class Bot:
             size = temporary_path.stat().st_size
             digest = sha256_file(temporary_path)
             published_digest = digest
-            lock_path = target.parent / ".hamkare-apk.lock"
+            lock_path = stage_dir / "publish.lock"
             with lock_path.open("a+b") as lock_handle:
                 os.chmod(lock_path, 0o600)
                 fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)

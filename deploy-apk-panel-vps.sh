@@ -18,3 +18,11 @@ trap cleanup EXIT
 
 git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$TEMP_DIR/repo"
 bash "$TEMP_DIR/repo/install-hamkare-apk-panel.sh"
+
+BOT_APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
+if [[ -f "$BOT_APP_DIR/telegram.env" && -f "$BOT_APP_DIR/bale.env" && -f "$BOT_APP_DIR/bot.py" ]]; then
+  bash "$TEMP_DIR/repo/enable-hamkare-telegram-direct-apk.sh"
+  echo '✅ پنل وب و دریافت مستقیم APK از مدیر تلگرام هر دو فعال شدند.'
+else
+  echo "⚠️ پنل وب فعال شد؛ نصب ربات در $BOT_APP_DIR پیدا نشد و تنظیم تلگرام تغییری نکرد." >&2
+fi

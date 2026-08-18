@@ -8,6 +8,9 @@ ADMIN = (ROOT / "hamkare-admin" / "admin.php").read_text(encoding="utf-8")
 INSTALLER = (ROOT / "install-hamkare-apk-panel.sh").read_text(encoding="utf-8")
 BOT_INSTALLER = (ROOT / "deploy-hamkare-bots.sh").read_text(encoding="utf-8")
 DOWNLOAD = (ROOT / "hamkare-admin" / "download.php").read_text(encoding="utf-8")
+BOT = (ROOT / "bot" / "hamkare_bot.py").read_text(encoding="utf-8")
+WRAPPER = (ROOT / "deploy-apk-panel-vps.sh").read_text(encoding="utf-8")
+DIRECT_ENABLE = (ROOT / "enable-hamkare-telegram-direct-apk.sh").read_text(encoding="utf-8")
 
 
 class AdminPanelStaticTests(unittest.TestCase):
@@ -70,6 +73,16 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertNotIn('telegram.env', INSTALLER)
         self.assertNotIn('APK_UPLOAD_ENABLED', INSTALLER)
         self.assertNotIn('GITHUB_DISPATCH_TOKEN', INSTALLER)
+
+    def test_one_command_enables_web_and_existing_telegram_bot(self):
+        self.assertIn('install-hamkare-apk-panel.sh', WRAPPER)
+        self.assertIn('enable-hamkare-telegram-direct-apk.sh', WRAPPER)
+        self.assertIn('BOT_APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"', WRAPPER)
+
+    def test_web_and_telegram_share_one_atomic_publish_lock(self):
+        self.assertIn("PANEL_APK_STAGE . '/publish.lock'", LIB)
+        self.assertEqual(BOT.count('stage_dir / "publish.lock"'), 3)
+        self.assertIn('chown www-data:www-data "$APK_STAGE/publish.lock"', DIRECT_ENABLE)
 
 
 if __name__ == "__main__":

@@ -68,7 +68,11 @@ rollback() {
 }
 trap rollback EXIT
 
-install -d -o root -g root -m 0700 "$APK_STAGE"
+install -d -o www-data -g www-data -m 0700 "$APK_STAGE"
+[[ ! -L "$APK_STAGE/publish.lock" ]] || { echo 'قفل انتشار APK معتبر نیست.' >&2; exit 1; }
+touch "$APK_STAGE/publish.lock"
+chown www-data:www-data "$APK_STAGE/publish.lock"
+chmod 0600 "$APK_STAGE/publish.lock"
 BOT_UID="$(stat -c %u -- "$BOT_TARGET")"
 BOT_GID="$(stat -c %g -- "$BOT_TARGET")"
 BOT_MODE="$(stat -c %a -- "$BOT_TARGET")"
