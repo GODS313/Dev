@@ -21,10 +21,10 @@
         <div><label>Chat ID تلگرام</label><input id="telegram_chat_id"></div>
         <div><label>توکن بله</label><input id="bale_token" type="password" placeholder="خالی یعنی بدون تغییر"></div>
         <div><label>Chat ID بله</label><input id="bale_chat_id"></div>
-        <div class="f"><label>منبع اصلی فایل APK</label><input id="download_source" type="url" value="https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk" readonly></div>
+        <div class="f"><label>منبع اصلی فایل APK</label><input id="download_source" type="url" value="https://seskia.online/download.php?src=hamkare" readonly></div>
         <button id="load" type="button">نمایش وضعیت</button><button id="save" type="button">ذخیره تنظیمات</button>
       </div>
-      <p class="note">توکن‌ها نمایش داده نمی‌شوند. لینک عمومی دانلود فقط GitHub Release رسمی همکاره است.</p>
+      <p class="note">توکن‌ها نمایش داده نمی‌شوند. لینک عمومی ثابت است و APK از سرور اصلی همکاره دریافت می‌شود.</p>
       <div id="status" class="s" role="status" aria-live="polite"></div>
     </section>
   </main>
@@ -32,7 +32,7 @@
     const $=id=>document.getElementById(id),show=(message,bad=false)=>{const el=$('status');el.textContent=message;el.className='s '+(bad?'bad':'');el.style.display='block'};
     async function api(method,body){if(!$('key').value)throw Error('رمز مدیریت را وارد کنید');const response=await fetch('/api/admin/config',{method,headers:{'Content-Type':'application/json','X-Admin-Key':$('key').value},body:body&&JSON.stringify(body),cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||'خطا');return data}
     $('load').onclick=async()=>{try{const data=await api('GET');for(const key of ['telegram_chat_id','bale_chat_id','download_source'])$(key).value=data[key]||'';show('تلگرام: '+(data.telegram_token_set?'متصل':'بدون توکن')+' | بله: '+(data.bale_token_set?'متصل':'بدون توکن'))}catch(error){show(error.message,1)}};
-    $('save').onclick=async()=>{try{const body={download_source:'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk'};for(const key of ['telegram_token','telegram_chat_id','bale_token','bale_chat_id'])if($(key).value.trim())body[key]=$(key).value.trim();const data=await api('PUT',body);$('telegram_token').value=$('bale_token').value='';show(data.changed?'تنظیمات اتمیک ذخیره شد؛ VPS فقط سرویس تغییرکرده را اعمال می‌کند.':'تغییری برای ذخیره وجود نداشت.')}catch(error){show(error.message,1)}};
+    $('save').onclick=async()=>{try{const body={download_source:'https://seskia.online/download.php?src=hamkare'};for(const key of ['telegram_token','telegram_chat_id','bale_token','bale_chat_id'])if($(key).value.trim())body[key]=$(key).value.trim();const data=await api('PUT',body);$('telegram_token').value=$('bale_token').value='';show(data.changed?'تنظیمات اتمیک ذخیره شد؛ VPS فقط سرویس تغییرکرده را اعمال می‌کند.':'تغییری برای ذخیره وجود نداشت.')}catch(error){show(error.message,1)}};
   </script>
 </body>
 </html>

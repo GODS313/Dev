@@ -65,17 +65,26 @@ test('registration rejects an oversized streamed body before JSON parsing', asyn
   assert.equal(response.status, 413);
 });
 
-test('download gateway always redirects to the official GitHub Release', async () => {
-  const { onRequestGet } = await importSource('functions/download.js');
-  const response = await onRequestGet({ env: {} });
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
-});
-
-test('download gateway ignores stale D1 download settings', async () => {
-  const { onRequestGet } = await importSource('functions/download.js');
-  const response = await onRequestGet({ env: { DB: { stale: true } } });
-  assert.equal(response.headers.get('Location'), 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk');
+test('download gateway streams the direct VPS APK with white-label headers', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.equal(url, 'https://seskia.online/download.php?src=hamkare');
+    return new Response('apk-bytes', {
+      status: 200,
+      headers: { 'Content-Type': 'application/octet-stream', 'Set-Cookie': 'nope=1' },
+    });
+  };
+  try {
+    const { onRequest } = await importSource('functions/download.js');
+    const response = await onRequest({ request: new Request('https://adlisho.online/download') });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Content-Type'), 'application/vnd.android.package-archive');
+    assert.equal(response.headers.get('Content-Disposition'), 'attachment; filename="hamkare.apk"');
+    assert.equal(response.headers.get('Set-Cookie'), null);
+    assert.equal(await response.text(), 'apk-bytes');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('admin config persists one revision with one atomic D1 batch', async () => {
@@ -102,7 +111,7 @@ test('admin config persists one revision with one atomic D1 batch', async () => 
     headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'admin-secret' },
     body: JSON.stringify({
       telegram_chat_id: '-1001234567890',
-      download_source: 'https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk',
+      download_source: 'https://seskia.online/download.php?src=hamkare',
     }),
   });
   const response = await onRequest({

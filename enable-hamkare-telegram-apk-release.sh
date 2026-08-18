@@ -121,7 +121,7 @@ finally:
     os.close(descriptor)
 
 updates = {
-    "DOWNLOAD_URL": "https://adlisho.online/download.php",
+    "DOWNLOAD_URL": "https://adlisho.online/download",
     "APK_UPLOAD_ENABLED": "true",
     "APK_DEPLOY_PATH": "/var/www/seskia/app.apk",
     "APK_STAGE_DIR": "/var/www/seskia/.hamkare-apk-staging",
@@ -172,7 +172,7 @@ systemctl is-active --quiet "$SERVICE"
 
 INSTALL_COMPLETE=1
 echo "✅ آپلود اضطراری مدیر $PLATFORM به GitHub Release متصل شد."
-echo '✅ مسیر عمومی بله، تلگرام و سایت: https://adlisho.online/download.php'
+echo '✅ مسیر عمومی بله، تلگرام و سایت: https://adlisho.online/download'
 echo "فقط $PLATFORM.env و سرویس $SERVICE تغییر کردند."
 echo "بکاپ: $BACKUP_DIR"
 echo "تست نهایی: در $PLATFORM با حساب مدیر، پنل مدیریت ← تعویض فایل APK را انتخاب کنید."

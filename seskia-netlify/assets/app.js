@@ -1,4 +1,4 @@
-const DOWNLOAD_URL = "https://adlisho.online/download.php";
+const DOWNLOAD_URL = "https://adlisho.online/download";
 const shell = document.querySelector(".site-shell");
 const themeButtons = [...document.querySelectorAll("[data-select-theme]")];
 const preferredTheme = new URLSearchParams(window.location.search).get("theme");

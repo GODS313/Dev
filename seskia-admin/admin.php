@@ -147,7 +147,7 @@ if ($authenticated) {
     <section class="hero">
       <h1>کنترل مرکزی APK و گزارش تلگرام</h1>
       <p>توکن بات مخصوص آپلود، چت گزارش و فایل اپلیکیشن را از همین صفحه تغییر بده.</p>
-      <div class="badges"><span class="badge">بله: بدون تغییر</span><span class="badge">APK: بکاپ و rollback</span><span class="badge">توکن: خارج از GitHub</span><span class="badge">لینک ثابت: GitHub Release</span></div>
+      <div class="badges"><span class="badge">بله: بدون تغییر</span><span class="badge">APK: بکاپ و rollback</span><span class="badge">توکن: خارج از مخزن</span><span class="badge">لینک ثابت: Adlisho</span></div>
       <?php if ($status): ?>
       <div class="stats">
         <div class="stat"><b><?= h($status['token_masked']) ?></b><span>توکن بات آپلود</span></div>

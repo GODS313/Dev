@@ -28,7 +28,7 @@ PRODUCTION_TEXT = (
 
 class ReleaseStaticTests(unittest.TestCase):
     def test_canonical_download_url_is_consistent(self):
-        expected = "https://adlisho.online/download.php"
+        expected = "https://adlisho.online/download"
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["apk_url"], expected)
         for relative_path in (

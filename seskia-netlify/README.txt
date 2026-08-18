@@ -6,7 +6,7 @@
 3) فایل ZIP را داخل صفحه رها کنید.
 
 لینک دانلود روی این آدرس تنظیم شده است:
-https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk
+https://adlisho.online/download
 
 برای عوض کردن لینک در آینده، همین آدرس را در دو فایل زیر جایگزین کنید:
 index.html

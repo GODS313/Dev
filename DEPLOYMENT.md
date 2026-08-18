@@ -38,7 +38,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 
 قرارداد پاسخ production در `GET /api/admin/sync` از کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` تشکیل می‌شود. مقدار هر بستر یا `null` است یا شیئی با کلیدهای دقیق `token` و `chat_id`؛ تغییر این نام‌ها باید هم‌زمان در Function، عامل VPS و این مستند انجام شود.
 
-مسیر عمومی دانلود ثابت است: `https://adlisho.online/download.php`. پنل منبع پشت‌صحنه را روی `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` نگه می‌دارد و مسیرهای `/download` و `/download.php` همان باینری Release را تحویل می‌دهند.
+مسیر عمومی دانلود ثابت است: `https://adlisho.online/download`. پنل منبع پشت‌صحنه را روی فایل مستقیم VPS نگه می‌دارد؛ `/download` فایل را stream می‌کند و `/download.php` فقط برای سازگاری قدیمی به `/download` هدایت می‌شود.
 
 ## 4) دامنه و HTTPS
 
@@ -53,7 +53,7 @@ npx wrangler@latest d1 migrations apply <D1_DATABASE_NAME> --remote
 2. `POST /api/register` با JSON معتبر باید `201` و کد پیگیری برگرداند.
 3. ثبت دوباره همان موبایل باید `200` برگرداند، اما برای جلوگیری از افشای اطلاعات نباید کد پیگیری قبلی را نمایش دهد؛ بازیابی از مسیر پشتیبانی انجام می‌شود.
 4. `GET /api/result?code=<CODE>&last4=<LAST4>` باید نتیجه را برگرداند.
-5. `GET /download` باید به GitHub Release پشت‌صحنه redirect شود و دکمه‌ها باید URL عمومی Adlisho را حفظ کنند.
+5. `GET /download` باید APK فعال VPS را با نام `hamkare.apk` و MIME اندروید تحویل دهد و دکمه‌ها باید URL عمومی Adlisho را حفظ کنند.
 6. `GET /download.php` باید در نهایت به همان URL redirect شود.
 7. در D1 Console درج سطر در جدول `registrations` را تأیید کنید.
 
@@ -69,7 +69,7 @@ sudo bash deploy-hamkare-bots.sh
 - شناسه عددی مدیران تلگرام و بله
 - نام برند و URLها از env یا مقادیر پیش‌فرض امن
 
-کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود. تعویض APK در بله همیشه غیرفعال است و در تلگرام نیز تا زمان اجرای فعال‌ساز امن GitHub غیرفعال می‌ماند. دکمه دانلود تلگرام و بله هر دو `https://adlisho.online/download.php` را از `DOWNLOAD_URL` می‌گیرند.
+کاربر عادی فقط ثبت‌نام، دانلود، سایت، پیگیری، پشتیبانی، حریم خصوصی و راهنما را می‌بیند. پنل مدیریت بات فقط برای شناسه‌های `ADMIN_IDS` ساخته می‌شود. تعویض APK در بله همیشه غیرفعال است و در تلگرام پس از اجرای فعال‌ساز مستقیم VPS در دسترس مدیر قرار می‌گیرد. دکمه دانلود تلگرام و بله هر دو `https://adlisho.online/download` را از `DOWNLOAD_URL` می‌گیرند.
 
 پس از نصب، `/start` را یک‌بار با حساب مدیر و یک‌بار با حساب کاربر عادی تست کنید. در هیچ‌کدام نباید «تعویض فایل APK» یا rollback نمایش داده شود.
 
@@ -81,22 +81,20 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 
 این نصب‌کننده writer، sudoers و config محلی قدیمی را پس از بکاپ بازنشسته می‌کند، یک timer سی‌ثانیه‌ای می‌سازد و env تلگرام و بله را مستقل اعمال می‌کند. مقدار `DOWNLOAD_URL` در هر دو env همیشه مسیر عمومی ثابت Adlisho است.
 
-## 7) انتشار APK
+## 7) انتشار APK مستقیم از تلگرام
 
-workflow دائمی `.github/workflows/publish-hamkare-apk.yml` انتشار را انجام می‌دهد. ورودی‌ها `source_url` و `sha256` هستند؛ URL باید دقیقاً مسیر `https://seskia.online/download.php?src=github-release&sha256=<SHA256>` باشد. workflow اندازه حداکثر ۲۰ MB، ساختار ZIP، `AndroidManifest.xml`، `classes.dex`، سلامت آرشیو، امضای دیجیتال، رد کلید تست Android، تطبیق signer با Release فعلی و SHA-256 را قبل از ایجاد Release بررسی می‌کند.
-
-برای اتصال آپلود تلگرام، یک fine-grained token محدود به مخزن `GODS313/Dev` با `Actions: Read and write` بسازید و روی VPS اجرا کنید:
+برای فعال‌کردن آپلود مستقیم مدیر تلگرام روی VPS، این فرمان را روی سرور اجرا کنید:
 
 ```bash
-( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-apk-release.sh" )
+( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-direct-apk.sh" )
 ```
 
-فعال‌ساز فقط `telegram.env` و override سرویس `hamkare-telegram.service` را تغییر می‌دهد، از هر دو بکاپ می‌گیرد و `bale.env` یا سرویس بله را تغییر نمی‌دهد. سپس مدیر عددی مجاز از منوی «تعویض فایل APK» فایل را به‌شکل Document ارسال می‌کند. بات فایل را در staging هم‌فایل‌سیستم قرار می‌دهد، SHA-256 را به workflow می‌فرستد و فقط پس از تطبیق دانلود public GitHub پیام موفقیت می‌دهد. اگر dispatch، validation، Release یا تأیید نهایی شکست بخورد، آخرین APK عمومی سالم فعال می‌ماند و نسخه محلی نیز در صورت جایگزینی بازگردانده می‌شود.
+فعال‌ساز از envها و فایل بات بکاپ می‌گیرد، دسترسی محدود لازم به `/var/www/seskia` را برای سرویس تلگرام برقرار می‌کند، آپلود بله را خاموش نگه می‌دارد و هر دو سرویس را بررسی می‌کند. سپس مدیر عددی مجاز فایل را به‌شکل Document می‌فرستد. بات ساختار APK، امضا، اندازه و SHA-256 را بررسی و فایل را اتمیک جایگزین می‌کند؛ موفقیت فقط پس از تطبیق فایل `https://adlisho.online/download` اعلام می‌شود. در هر شکست، فایل سالم قبلی فعال می‌ماند یا از بکاپ بازگردانده می‌شود.
 
 ## 8) Rollback
 
 در Pages > Deployments یک deployment سالم قبلی را انتخاب و Rollback/Redeploy کنید.
 
-برای rollback خود APK، مدیر تلگرام گزینه بازگردانی را تأیید می‌کند؛ همان نسخه پشتیبان دوباره اعتبارسنجی و از مسیر workflow به latest GitHub Release تبدیل می‌شود. Release تازه تا پیش از آپلود asset به‌صورت Draft می‌ماند و در صورت شکست تأیید نهایی خودکار حذف می‌شود. برای rollback کامل سرویس‌های استخدامی، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
+برای rollback خود APK، مدیر تلگرام گزینه بازگردانی را تأیید می‌کند؛ نسخه پشتیبان دوباره اعتبارسنجی و به‌صورت اتمیک روی مسیر زنده VPS قرار می‌گیرد. برای rollback کامل سرویس‌ها، پوشه `/opt/hamkare-bots.backup-<timestamp>` نگهداری می‌شود؛ سپس `systemctl daemon-reload` و restart سرویس لازم را اجرا کنید.
 
-بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیر عمومی Adlisho ثابت می‌ماند و GitHub Release منبع پشت‌صحنه است.
+بکاپ مهاجرت sync در `/var/backups/hamkare-admin-sync-<timestamp>` قرار می‌گیرد. برای بازگشت اضطراری، timer را متوقف کنید، envهای بکاپ را برگردانید و فقط سرویس مربوط را restart کنید. مسیر عمومی Adlisho ثابت می‌ماند و فایل زنده VPS منبع پشت‌صحنه است.

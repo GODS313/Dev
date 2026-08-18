@@ -14,10 +14,8 @@ PRODUCTION_DOCS = {
     'README.md': (ROOT / 'README.md').read_text(encoding='utf-8'),
     'DEPLOYMENT.md': (ROOT / 'DEPLOYMENT.md').read_text(encoding='utf-8'),
 }
-RELEASE_URL_RE = re.compile(
-    r'https://github\.com/GODS313/Dev/releases/latest/download/[A-Za-z0-9._-]+\.apk'
-)
-PUBLIC_URL_RE = re.compile(r'https://adlisho\.online/download\.php')
+ORIGIN_URL_RE = re.compile(r'https://seskia\.online/download\.php\?src=hamkare')
+PUBLIC_URL_RE = re.compile(r'https://adlisho\.online/download')
 SYNC_TOP_LEVEL_KEYS = {
     'revision',
     'canonical_download_url',
@@ -46,22 +44,17 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         self.assertGreaterEqual(INSTALLER.count('os.fsync('), 3)
         self.assertIn('flock(lock, fcntl.LOCK_EX)', INSTALLER)
 
-    def test_release_target_does_not_drift_across_runtime_and_production_docs(self):
+    def test_direct_apk_origin_does_not_drift_across_runtime(self):
         sources = {
             'functions/api/admin/sync.js': SYNC_API,
             'functions/download.js': DOWNLOAD,
-            'scripts/publish-hamkare-apk.sh': RELEASE_PUBLISHER,
-            **PRODUCTION_DOCS,
         }
-        urls_by_source = {
-            name: set(RELEASE_URL_RE.findall(content))
-            for name, content in sources.items()
-        }
+        urls_by_source = {name: set(ORIGIN_URL_RE.findall(content)) for name, content in sources.items()}
         for name, urls in urls_by_source.items():
-            self.assertEqual(len(urls), 1, f'exactly one canonical release target is required in {name}')
+            self.assertEqual(len(urls), 1, f'exactly one direct APK origin is required in {name}')
         canonical = urls_by_source['functions/api/admin/sync.js']
         for name, urls in urls_by_source.items():
-            self.assertEqual(urls, canonical, f'download target drifted in {name}')
+            self.assertEqual(urls, canonical, f'direct APK origin drifted in {name}')
 
     def test_public_adlisho_target_does_not_drift(self):
         sources = {
@@ -73,7 +66,7 @@ class HamkareAdminSyncStaticTests(unittest.TestCase):
         for name, content in sources.items():
             self.assertEqual(
                 set(PUBLIC_URL_RE.findall(content)),
-                {'https://adlisho.online/download.php'},
+                {'https://adlisho.online/download'},
                 f'public Adlisho target drifted in {name}',
             )
 

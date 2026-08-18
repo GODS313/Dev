@@ -32,6 +32,62 @@ function json(body, status = 200, origin = '') {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+const base64ToBytes = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+
+async function decryptSetting(value, env) {
+  const [ivValue, ciphertextValue, extra] = String(value).split('.');
+  if (!ivValue || !ciphertextValue || extra !== undefined) throw new Error('invalid ciphertext');
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(env.CONFIG_ENCRYPTION_KEY),
+  );
+  const key = await crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['decrypt']);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(ivValue) },
+    key,
+    base64ToBytes(ciphertextValue),
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
+async function notifyRegistration(env, record) {
+  if (!env.CONFIG_ENCRYPTION_KEY) return;
+  try {
+    const result = await env.DB.prepare(
+      "SELECT key,value FROM bot_settings WHERE key IN ('telegram_token','telegram_chat_id','bale_token','bale_chat_id')",
+    ).all();
+    const settings = Object.fromEntries((result.results || []).map((row) => [row.key, row.value]));
+    const text = [
+      '📥 ثبت درخواست جدید از وب‌سایت همکاره',
+      `نام: ${record.name}`,
+      `موبایل: ${record.phone}`,
+      `استان: ${record.province}`,
+      `کد پیگیری: ${record.tracking}`,
+      `سابقه: ${record.answers.q1}`,
+      `تحصیلات: ${record.answers.q2}`,
+      `شیفت: ${record.answers.q3}`,
+    ].join('\n');
+    const targets = [
+      ['telegram', 'https://api.telegram.org/bot'],
+      ['bale', 'https://tapi.bale.ai/bot'],
+    ];
+    await Promise.allSettled(targets.map(async ([platform, endpoint]) => {
+      const encryptedToken = settings[`${platform}_token`];
+      const chatId = settings[`${platform}_chat_id`];
+      if (!encryptedToken || !chatId) return;
+      const token = await decryptSetting(encryptedToken, env);
+      const response = await fetch(`${endpoint}${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+      if (!response.ok) throw new Error(`${platform} notification failed`);
+    }));
+  } catch (error) {
+    console.error('registration notification failed', error instanceof Error ? error.name : 'unknown');
+  }
+}
+
 async function readJsonBody(request, maxBytes) {
   if (!request.body) throw new Error('invalid-json');
   const reader = request.body.getReader();
@@ -52,7 +108,7 @@ async function readJsonBody(request, maxBytes) {
   return JSON.parse(text);
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest({ request, env, waitUntil }) {
   const requestOrigin = request.headers.get('Origin') || '';
   const allowed = allowedOrigins(env);
   const corsOrigin = allowed.has(requestOrigin) ? requestOrigin : '';
@@ -154,6 +210,15 @@ export async function onRequest({ request, env }) {
       tracking,
     ).run();
     if (!result.success) throw new Error('insert failed');
+    const notification = notifyRegistration(env, {
+      name,
+      phone,
+      province,
+      answers: { q1: String(answers.q1), q2: answers.q2, q3: answers.q3 },
+      tracking,
+    });
+    if (typeof waitUntil === 'function') waitUntil(notification);
+    else await notification;
     return json({ ok: true, tracking }, 201, corsOrigin);
   } catch (error) {
     console.error('registration error', error instanceof Error ? error.name : 'unknown');

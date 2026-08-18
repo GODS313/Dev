@@ -135,7 +135,7 @@ import sys
 import tempfile
 
 updates = {
-    "DOWNLOAD_URL": "https://adlisho.online/download.php",
+    "DOWNLOAD_URL": "https://adlisho.online/download",
     "SITE_URL": "https://adlisho.online",
     "SUPPORT_URL": "https://adlisho.online/contact.html",
     "PRIVACY_URL": "https://adlisho.online/privacy.html",
@@ -178,7 +178,7 @@ PY
   sleep 5
   systemctl is-active --quiet hamkare-telegram.service
   systemctl is-active --quiet hamkare-bale.service
-  echo '✅ سایت، تلگرام و بله به https://adlisho.online/download.php متصل شدند.'
+  echo '✅ سایت، تلگرام و بله به https://adlisho.online/download متصل شدند.'
   echo "✅ توکن‌ها و Chat IDها تغییر نکردند. بکاپ: $backup"
 }
 
@@ -189,7 +189,7 @@ SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 [[ -f "$SOURCE_BOT" ]] || { echo "فایل بات پیدا نشد: $SOURCE_BOT" >&2; exit 1; }
 BRAND_NAME="${BRAND_NAME:-همکاره}"
 SITE_URL="${SITE_URL:-https://adlisho.online}"
-DOWNLOAD_URL='https://adlisho.online/download.php'
+DOWNLOAD_URL='https://adlisho.online/download'
 SUPPORT_URL="${SUPPORT_URL:-https://adlisho.online/contact.html}"
 PRIVACY_URL="${PRIVACY_URL:-https://adlisho.online/privacy.html}"
 TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"
@@ -300,7 +300,7 @@ echo '✅ هر دو بات وایت‌لیبل همکاره فعال شدند.'
 echo "تلگرام: https://t.me/$TELEGRAM_BOT_USERNAME"
 echo "بله: https://ble.ir/$BALE_BOT_USERNAME"
 echo "دانلود ثابت: $DOWNLOAD_URL"
-echo 'تعویض فایل APK: فقط با انتشار فایل hamkare.apk در GitHub Release پروژه GODS313/Dev'
+echo 'تعویض مستقیم APK تلگرام: enable-hamkare-telegram-direct-apk.sh را روی VPS اجرا کنید؛ آپلود بله غیرفعال می‌ماند.'
 echo 'بات استخدامی تلگرام و بات بله هیچ دسترسی مستقیم به فایل APK ندارند.'
 [[ -z "$BACKUP" ]] || echo "بکاپ نسخه قبلی: $BACKUP"
 echo 'تست: /start را از یک حساب مدیر و یک حساب کاربر عادی در هر دو بات اجرا کنید.'

@@ -84,7 +84,7 @@ class PermissionTests(unittest.TestCase):
                 token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
                 log_chat_id="-1001234567890",
                 admin_ids=self.admins,
-                download_url="https://adlisho.online/download.php",
+                download_url="https://adlisho.online/download",
                 site_url="https://adlisho.online",
                 support_url="https://adlisho.online/contact.html",
                 privacy_url="https://adlisho.online/privacy.html",
@@ -119,9 +119,26 @@ class PermissionTests(unittest.TestCase):
             self.assertIn("admin_panel", admin_callbacks)
             self.assertIn("admin_upload", panel_callbacks)
             self.assertIn("admin_rollback", panel_callbacks)
+            self.assertIn("admin_positions", panel_callbacks)
+            self.assertIn("positions", user_callbacks)
+            self.assertNotIn("https://adlisho.online", {
+                button.get("url") for row in bot.user_menu("20002") for button in row
+            })
+
+            custom_positions = [
+                {"title": f"سمت {index}", "description": f"توضیح سمت شماره {index}"}
+                for index in range(1, 5)
+            ]
+            bot.set_setting("job_positions", json.dumps(custom_positions, ensure_ascii=False))
+            self.assertEqual(bot.positions()[0], ("سمت 1", "توضیح سمت شماره 1"))
+            sent = []
+            bot.send = lambda chat_id, text, keyboard=None: sent.append((text, keyboard))
+            bot.show_positions("20002")
+            callbacks = [button["callback_data"] for row in sent[-1][1][:-1] for button in row]
+            self.assertEqual(callbacks, ["position_0", "position_1", "position_2", "position_3"])
 
     def test_bale_download_button_uses_the_canonical_adlisho_endpoint(self):
-        expected = "https://adlisho.online/download.php"
+        expected = "https://adlisho.online/download"
         with tempfile.TemporaryDirectory() as directory:
             config = BOT.Config(
                 platform="bale",
@@ -154,7 +171,7 @@ class ValidationTests(unittest.TestCase):
             token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             log_chat_id="-1001234567890",
             admin_ids=frozenset({"10001"}),
-            download_url="https://adlisho.online/download.php",
+            download_url="https://adlisho.online/download",
             site_url="https://adlisho.online",
             support_url="https://adlisho.online/contact.html",
             privacy_url="https://adlisho.online/privacy.html",
@@ -442,7 +459,7 @@ class ValidationTests(unittest.TestCase):
             "BOT_TOKEN": "1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
             "LOG_CHAT_ID": "-1001234567890",
             "ADMIN_IDS": "10001",
-            "DOWNLOAD_URL": "https://adlisho.online/download.php",
+            "DOWNLOAD_URL": "https://adlisho.online/download",
             "SITE_URL": "https://adlisho.online",
             "SUPPORT_URL": "https://adlisho.online/contact.html",
             "PRIVACY_URL": "https://adlisho.online/privacy.html",

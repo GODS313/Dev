@@ -8,7 +8,7 @@ APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 TG_ENV="$APP_DIR/telegram.env"
 BALE_ENV="$APP_DIR/bale.env"
 SYNC_URL="${HAMKARE_SYNC_URL:-https://adlisho.online/api/admin/sync}"
-PUBLIC_DOWNLOAD_URL='https://adlisho.online/download.php'
+PUBLIC_DOWNLOAD_URL='https://adlisho.online/download'
 SYNC_PROGRAM=/usr/local/sbin/hamkare-admin-sync
 SYNC_ENV=/etc/hamkare-admin-sync.env
 STATE_DIR=/var/lib/hamkare-admin-sync
@@ -58,7 +58,7 @@ TG_ENV = os.environ.get("HAMKARE_TELEGRAM_ENV", "/opt/hamkare-bots/telegram.env"
 BALE_ENV = os.environ.get("HAMKARE_BALE_ENV", "/opt/hamkare-bots/bale.env")
 SYNC_URL = os.environ.get("HAMKARE_SYNC_URL", "https://adlisho.online/api/admin/sync")
 SYNC_KEY = os.environ["VPS_SYNC_KEY"]
-PUBLIC_DOWNLOAD_URL = "https://adlisho.online/download.php"
+PUBLIC_DOWNLOAD_URL = "https://adlisho.online/download"
 STATE_FILE = "/var/lib/hamkare-admin-sync/state.json"
 LOCK_FILE = "/run/lock/hamkare-admin-sync.lock"
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_:.-]{20,256}$")
@@ -324,6 +324,6 @@ systemctl is-active --quiet hamkare-admin-sync.timer
 
 echo '✅ source of truth: Cloudflare D1'
 echo '✅ پنل واحد: https://adlisho.online/admin'
-echo '✅ دانلود ثابت: https://adlisho.online/download.php'
+echo '✅ دانلود ثابت: https://adlisho.online/download'
 echo "✅ بکاپ مسیر قدیمی: $BACKUP_DIR"
 echo 'وضعیت: systemctl status hamkare-admin-sync.timer --no-pager'

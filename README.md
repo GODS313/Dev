@@ -14,7 +14,7 @@
 - منوی شیشه‌ای کامل برای تلگرام و بله
 - جداسازی قطعی منوی کاربر و مدیر با allowlist شناسه عددی
 - آمار و توقف ثبت‌نام در بات
-- Release واقعی GitHub با asset وایت‌لیبل `hamkare.apk`
+- انتشار مستقیم و اتمیک APK روی VPS با لینک عمومی ثابت
 - لینک ثابت عمومی و QR قابل اسکن برای همان asset
 
 ## استقرار
@@ -23,13 +23,13 @@
 
 ## پنل production و منبع واحد تنظیمات
 
-مسیر canonical مدیریت فقط `https://adlisho.online/admin` است و Cloudflare D1 منبع تنظیمات توکن و Chat ID تلگرام و بله است. منبع پشت‌صحنه APK فقط GitHub Release رسمی است. ذخیره‌های چندفیلدی با `D1 batch` همراه یک `config_revision` انجام می‌شوند؛ بنابراین revision ناقص یا ترکیبی منتشر نمی‌شود.
+مسیر canonical مدیریت فقط `https://adlisho.online/admin` است و Cloudflare D1 منبع تنظیمات توکن و Chat ID تلگرام و بله است. منبع پشت‌صحنه APK فایل اعتبارسنجی‌شده روی VPS است. ذخیره‌های چندفیلدی با `D1 batch` همراه یک `config_revision` انجام می‌شوند؛ بنابراین revision ناقص یا ترکیبی منتشر نمی‌شود.
 
 `GET /api/admin/sync` فقط با secret مستقل `VPS_SYNC_KEY` قابل خواندن است. عامل همگام‌سازی VPS هر ۳۰ ثانیه revision را دریافت، فایل env هر بستر را جداگانه و با `fsync + rename` جایگزین و فقط همان سرویسی را restart می‌کند که مقدارهایش واقعاً تغییر کرده‌اند. تغییر تلگرام به `bale.env` دست نمی‌زند و سرویس بله را restart نمی‌کند؛ تغییر صرفِ منبع APK نیز هیچ رباتی را restart نمی‌کند.
 
 قرارداد production این endpoint شامل کلیدهای سطح اصلی `revision`، `canonical_download_url`، `download_source`، `telegram` و `bale` است. مقدار هر بستر یا `null` است یا فقط کلیدهای `token` و `chat_id` را دارد؛ عامل VPS نیز دقیقاً همین نام‌ها را مصرف می‌کند.
 
-مسیر عمومی و یکتای دانلود `https://adlisho.online/download.php` است. دکمه سایت، QR، ربات تلگرام و ربات بله همگی همین URL را استفاده می‌کنند؛ این درگاه در پشت‌صحنه به `https://github.com/GODS313/Dev/releases/latest/download/hamkare.apk` هدایت می‌شود.
+مسیر عمومی و یکتای دانلود `https://adlisho.online/download` است. دکمه سایت، QR، ربات تلگرام و ربات بله همگی همین URL را استفاده می‌کنند؛ این درگاه فایل فعال و امضاشده روی VPS را به‌صورت streaming تحویل می‌دهد.
 
 نصب عامل sync روی VPS:
 
@@ -41,17 +41,15 @@ curl -fsSLo /tmp/install-hamkare-admin-vps.sh https://raw.githubusercontent.com/
 
 ## مدیریت APK
 
-فایل APK فقط با نام دقیق `hamkare.apk` در GitHub Release پروژه `GODS313/Dev` منتشر می‌شود. لینک `releases/latest/download` بدون تغییر باقی می‌ماند و همیشه asset آخرین Release را ارائه می‌کند. تنظیمات ربات‌های استخدامی فقط از پنل production همکاره در `/admin` مدیریت می‌شوند و توکن‌ها تغییری نمی‌کنند.
+فایل APK فقط توسط مدیر عددی مجاز در ربات تلگرام پذیرفته می‌شود. بات ساختار، اندازه و امضای APK را بررسی می‌کند، از نسخه فعال بکاپ می‌گیرد و فایل را اتمیک روی VPS جایگزین می‌کند. ربات بله اجازه تعویض فایل ندارد.
 
-workflow دائمی `.github/workflows/publish-hamkare-apk.yml` ورودی‌های `source_url` و `sha256` را می‌گیرد، فقط منبع HTTPS تأییدشده Seskia را قبول می‌کند و قبل از انتشار اندازه، ساختار ZIP/APK، Manifest، DEX، SHA-256 و تداوم گواهی امضای نسخه فعلی GitHub را بررسی می‌کند. Release ابتدا Draft است و فقط پس از آپلود asset با نام `hamkare.apk` به latest تبدیل می‌شود؛ تأیید ناموفق باعث حذف خودکار Release تازه و حفظ نسخه سالم قبلی می‌شود.
-
-برای فعال‌کردن منوی آپلود فقط در بات تلگرام، یک fine-grained token مخصوص همین مخزن با دسترسی `Actions: Read and write` بسازید و دستور زیر را روی VPS اجرا کنید. توکن به‌شکل مخفی پرسیده و فقط در `telegram.env` با دسترسی محدود ذخیره می‌شود؛ `bale.env` تغییر نمی‌کند.
+برای فعال‌کردن منوی آپلود مستقیم فقط در بات تلگرام، دستور زیر را روی VPS اجرا کنید. توکن‌های موجود بازنویسی نمی‌شوند و قبل از هر تغییر بکاپ ساخته می‌شود.
 
 ```bash
-( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-apk-release.sh" )
+( workdir="$(mktemp -d)"; trap 'rm -rf -- "$workdir"' EXIT; git clone --depth 1 https://github.com/GODS313/Dev.git "$workdir/Dev" && sudo bash "$workdir/Dev/enable-hamkare-telegram-direct-apk.sh" )
 ```
 
-پس از فعال‌سازی، مدیر مجاز در بات تلگرام از «پنل مدیریت ← تعویض فایل APK» فایل را به‌شکل Document می‌فرستد. بات پس از اعتبارسنجی و بکاپ، workflow را با SHA-256 همان فایل اجرا و تا تطبیق دانلود عمومی GitHub صبر می‌کند. دکمه بله، تلگرام و سایت بدون تغییر لینک، نسخه جدید GitHub را دریافت می‌کنند.
+پس از فعال‌سازی، مدیر مجاز در بات تلگرام از «پنل مدیریت ← تعویض فایل APK» فایل را به‌شکل Document می‌فرستد. بات پس از اعتبارسنجی و بکاپ، فایل را روی VPS منتشر و SHA-256 مسیر عمومی را تطبیق می‌دهد. دکمه بله، تلگرام و سایت بدون تغییر لینک نسخه جدید را دریافت می‌کنند.
 
 نصب بات‌ها:
 
