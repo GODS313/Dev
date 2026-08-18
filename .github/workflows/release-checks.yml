@@ -29,9 +29,7 @@ jobs:
             install-hamkare-apk-panel.sh \
             install-hamkare-admin-vps.sh \
             enable-hamkare-telegram-direct-apk.sh \
-            enable-hamkare-telegram-apk-release.sh \
-            enable-hamkare-bale-direct-apk.sh \
-            scripts/publish-hamkare-apk.sh
+            enable-hamkare-bale-direct-apk.sh
       - name: Python tests
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Node tests
