@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import fcntl
 import hashlib
 import json
@@ -207,29 +206,16 @@ def format_iran_route_report(site_url: str) -> str:
         "نودها: " + "، ".join(f"{name.split('.')[0]} ({city})" for name, (_, city) in nodes.items()),
         "",
     ]
-    completed: dict[str, dict[str, str] | Exception] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        pending = {
-            path: executor.submit(check_route_from_iran, origin + path, node_names)
-            for _, path in IRAN_ROUTE_PATHS
-        }
-        for path, future in pending.items():
-            try:
-                completed[path] = future.result()
-            except Exception as error:
-                completed[path] = error
     for label, path in IRAN_ROUTE_PATHS:
         try:
-            value = completed[path]
-            if isinstance(value, Exception):
-                raise value
-            statuses = value
+            statuses = check_route_from_iran(origin + path, node_names)
             good = sum(status.startswith(("2", "3")) for status in statuses.values())
             marker = "✅" if good == len(statuses) and good else "⚠️" if good else "❌"
             detail = "، ".join(f"{node.split('.')[0]}:{status}" for node, status in statuses.items())
             lines.append(f"{marker} {label} {path} — {detail or 'بدون نتیجه'}")
         except Exception as error:
             lines.append(f"❌ {label} {path} — {type(error).__name__}")
+        time.sleep(0.4)
     lines.extend(("", "این تست فقط GET عمومی و غیرمخرب است؛ رمز، OTP یا داده‌ای ارسال نشد."))
     return "\n".join(lines)
 

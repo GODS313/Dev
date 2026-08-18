@@ -48,6 +48,17 @@ install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/terms.html" "$WEB_ROOT/te
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/contact.html" "$WEB_ROOT/contact.html"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/register.php" "$WEB_ROOT/register.php"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/result.php" "$WEB_ROOT/result.php"
+for compatibility_file in \
+  auth/login/index.html \
+  est/index.html \
+  est/auth/login/index.html \
+  est/api/health/index.html \
+  est/api/version/index.html
+do
+  install -d -o www-data -g www-data -m 0755 "$WEB_ROOT/$(dirname -- "$compatibility_file")"
+  install -o www-data -g www-data -m 0644 \
+    "$TMP_DIR/repo/compat/$compatibility_file" "$WEB_ROOT/$compatibility_file"
+done
 install -d -o www-data -g www-data -m 0750 /var/lib/hamkare-web
 
 python3 - /opt/hamkare-bots/telegram.env /opt/hamkare-bots/bale.env /etc/hamkare-web-notify.json <<'PY'
