@@ -1,12 +1,13 @@
 /*
-  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Cross-Origin-Opener-Policy: same-origin
-  X-Permitted-Cross-Domain-Policies: none
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self' https://adlisho.online; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://seskia.online https://api.qrserver.com; connect-src 'self' https://adlisho.online https://api.telegram.org; font-src https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+/manifest.json
+  Cache-Control: public, max-age=3600
 
 /config.json
   Cache-Control: no-store
@@ -17,12 +18,9 @@
 /qr-download.png
   Cache-Control: public, max-age=604800, immutable
 
-/manifest.json
-  Cache-Control: public, max-age=3600
-
 /admin.html
   Cache-Control: no-store
   X-Robots-Tag: noindex, nofollow
 
-/api/admin/*
+/functions/*
   Cache-Control: no-store

@@ -20,3 +20,4 @@ https://www.adlisho.online/* https://adlisho.online/:splat 301
 /admin.html /admin 301
 /admin.php /admin 301
 /admin /admin.html 200
+/* /index.html 200

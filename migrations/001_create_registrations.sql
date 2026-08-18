@@ -10,3 +10,12 @@ CREATE TABLE IF NOT EXISTS registrations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations(created_at);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ip TEXT NOT NULL,
+  attempted_at DATETIME NOT NULL,
+  success INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_ip ON rate_limits(ip);
