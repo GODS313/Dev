@@ -34,6 +34,8 @@ cp -a "$WEB_ROOT/." "$BACKUP_DIR/"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/index.html" "$WEB_ROOT/index.html"
 if [[ -f "$TMP_DIR/repo/download.php" ]]; then
   install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/download.php" "$WEB_ROOT/download.php"
+  install -d -o www-data -g www-data -m 0755 "$WEB_ROOT/download"
+  install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/download.php" "$WEB_ROOT/download/index.php"
 elif [[ -e "$WEB_ROOT/download.php" || -L "$WEB_ROOT/download.php" ]]; then
   # The complete web-root backup above keeps this recoverable; never preserve stale PHP.
   rm -- "$WEB_ROOT/download.php"
@@ -42,6 +44,10 @@ install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/result.html" "$WEB_ROOT/r
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/config.json" "$WEB_ROOT/config.json"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/favicon.svg" "$WEB_ROOT/favicon.svg"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/qr-download.png" "$WEB_ROOT/qr-download.png"
+install -d -o www-data -g www-data -m 0755 "$WEB_ROOT/assets"
+for image in team.jpg office.jpg industry.jpg; do
+  install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/assets/$image" "$WEB_ROOT/assets/$image"
+done
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/manifest.json" "$WEB_ROOT/manifest.json"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/privacy.html" "$WEB_ROOT/privacy.html"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/terms.html" "$WEB_ROOT/terms.html"
@@ -95,5 +101,12 @@ php -l "$WEB_ROOT/register.php"
 php -l "$WEB_ROOT/result.php"
 nginx -t
 systemctl reload nginx
+
+curl -fsS --connect-timeout 10 --max-time 30 \
+  --resolve adlisho.online:443:127.0.0.1 \
+  -o /dev/null https://adlisho.online/ || {
+    echo 'Local HTTPS verification failed after deployment.' >&2
+    exit 1
+  }
 
 echo "Deployment completed. Backup: $BACKUP_DIR"

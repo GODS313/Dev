@@ -1,6 +1,6 @@
 {
   "brand_name": "همکاره",
-  "brand_tagline": "سامانه ثبت و پیگیری همکاری",
+  "brand_tagline": "فرصت‌های همکاری سراسر کشور",
   "release_revision": "hamkare-v1",
   "apk_url": "https://adlisho.online/download",
   "production_domain": "https://adlisho.online",
@@ -8,6 +8,5 @@
   "telegram_bot": "https://t.me/Pasokh313e_bot",
   "bale_bot": "https://ble.ir/Hamkarebot",
   "support_url": "https://adlisho.online/contact.html",
-  "privacy_url": "https://adlisho.online/privacy.html",
-  "tracking_url": "https://adlisho.online/result.html"
+  "privacy_url": "https://adlisho.online/privacy.html"
 }
