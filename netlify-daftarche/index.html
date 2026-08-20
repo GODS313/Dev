@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#082f49">
+  <meta name="description" content="دریافت مستقیم دفترچه استخدامی همکاره">
+  <title>دریافت دفترچه استخدامی | همکاره</title>
+  <style>
+    :root{--ink:#0b1f2a;--muted:#5e727d;--navy:#082f49;--blue:#0369a1;--cyan:#22d3ee;--paper:#f6fafb;--line:rgba(8,47,73,.12)}
+    *{box-sizing:border-box}html{color-scheme:light}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 15%,rgba(34,211,238,.22),transparent 32%),radial-gradient(circle at 85% 85%,rgba(3,105,161,.17),transparent 36%),linear-gradient(145deg,#f8fcfd,#eaf4f7);color:var(--ink);font-family:Tahoma,"Segoe UI",Arial,sans-serif;overflow-x:hidden}
+    body:before,body:after{content:"";position:fixed;border-radius:999px;filter:blur(1px);pointer-events:none}body:before{width:320px;height:320px;right:-130px;top:-130px;background:linear-gradient(135deg,rgba(8,47,73,.11),rgba(34,211,238,.08))}body:after{width:230px;height:230px;left:-90px;bottom:-90px;border:1px solid rgba(8,47,73,.11)}
+    .shell{width:min(100%,920px);position:relative}.brand{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 18px;color:var(--navy);font-weight:900;letter-spacing:-.02em}.mark{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:var(--navy);color:#fff;box-shadow:0 8px 24px rgba(8,47,73,.22)}
+    .card{display:grid;grid-template-columns:1.08fr .92fr;background:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.95);border-radius:30px;overflow:hidden;box-shadow:0 30px 90px rgba(8,47,73,.14),inset 0 0 0 1px var(--line);backdrop-filter:blur(18px)}
+    .content{padding:clamp(30px,6vw,68px)}.eyebrow{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;padding:8px 12px;border:1px solid rgba(3,105,161,.15);border-radius:999px;background:#eff9fc;color:var(--blue);font-size:.82rem;font-weight:800}.dot{width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 0 5px rgba(16,185,129,.12)}
+    h1{margin:0;font-size:clamp(2rem,5vw,3.7rem);line-height:1.18;letter-spacing:-.055em;color:var(--navy)}.lead{margin:20px 0 26px;color:var(--muted);font-size:clamp(.98rem,2vw,1.08rem);line-height:2}
+    .download{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;min-height:58px;padding:14px 20px;border:0;border-radius:17px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;text-decoration:none;font-weight:900;font-size:1.05rem;box-shadow:0 16px 32px rgba(3,105,161,.23);transition:.22s ease}.download:hover{transform:translateY(-2px);box-shadow:0 20px 38px rgba(3,105,161,.3)}.download:active{transform:translateY(0)}
+    .note{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:14px;color:#70848e;font-size:.78rem}.note svg{width:15px}
+    .visual{position:relative;min-height:470px;display:grid;place-items:center;padding:36px;background:linear-gradient(155deg,var(--navy),#075985 62%,#0891b2);isolation:isolate}.visual:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);background-size:28px 28px;mask-image:linear-gradient(to bottom,black,transparent)}
+    .document{position:relative;width:min(100%,270px);aspect-ratio:.76;background:#fff;border-radius:24px;padding:28px;box-shadow:0 28px 70px rgba(0,0,0,.3);transform:rotate(-3deg);z-index:1}.document:before{content:"";position:absolute;width:74px;height:74px;top:-18px;left:-18px;border-radius:22px;background:linear-gradient(145deg,#67e8f9,#22d3ee);box-shadow:0 15px 30px rgba(34,211,238,.3)}.seal{position:relative;display:grid;place-items:center;width:66px;height:66px;margin-bottom:24px;border-radius:20px;background:#e8f7fb;color:var(--navy);font-size:2rem;font-weight:900}.doc-title{font-size:1.18rem;font-weight:900;color:var(--navy);margin-bottom:8px}.doc-sub{font-size:.78rem;color:#78909a}.rule{height:8px;margin-top:16px;border-radius:9px;background:#e8eff2}.rule.short{width:68%}.badge{position:absolute;right:-22px;bottom:28px;padding:11px 16px;border-radius:14px;background:#ecfdf5;color:#047857;font-size:.78rem;font-weight:900;box-shadow:0 14px 30px rgba(0,0,0,.14);transform:rotate(3deg)}
+    footer{text-align:center;margin-top:18px;color:#7a8e97;font-size:.78rem}footer b{color:var(--navy)}
+    @media(max-width:720px){body{padding:16px}.card{grid-template-columns:1fr;border-radius:25px}.visual{min-height:310px;order:-1}.document{width:210px;padding:22px}.content{padding:30px 24px 34px}h1{font-size:2.25rem}.brand{margin-bottom:12px}}
+    @media(prefers-reduced-motion:no-preference){.card{animation:rise .65s cubic-bezier(.2,.8,.2,1) both}.document{animation:float 5s ease-in-out infinite}@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}@keyframes float{50%{transform:translateY(-8px) rotate(-1deg)}}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand"><span class="mark">هـ</span><span>سامانه همکاره</span></div>
+    <section class="card" aria-labelledby="title">
+      <div class="content">
+        <span class="eyebrow"><span class="dot"></span> نسخه رسمی و به‌روز</span>
+        <h1 id="title">دریافت دفترچه استخدامی</h1>
+        <p class="lead">برای مشاهده شرایط همکاری، مراحل ثبت درخواست و اطلاعات موردنیاز، دفترچه رسمی استخدامی همکاره را دریافت کنید.</p>
+        <a class="download" href="https://adlisho.online/download" rel="noopener" aria-label="دریافت دفترچه استخدامی همکاره">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          دریافت دفترچه استخدامی
+        </a>
+        <div class="note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 12 3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" stroke-width="2"/></svg>دانلود مستقیم از منبع رسمی همکاره</div>
+      </div>
+      <div class="visual" aria-hidden="true">
+        <div class="document"><div class="seal">هـ</div><div class="doc-title">دفترچه استخدامی</div><div class="doc-sub">راهنمای رسمی ثبت درخواست همکاری</div><div class="rule"></div><div class="rule"></div><div class="rule short"></div><div class="badge">✓ آماده دریافت</div></div>
+      </div>
+    </section>
+    <footer>© ۲۰۲۶ <b>همکاره</b> — تمامی حقوق محفوظ است.</footer>
+  </main>
+</body>
+</html>
