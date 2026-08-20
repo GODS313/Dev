@@ -30,7 +30,7 @@ test('duplicate registration never discloses the existing tracking code', async 
       name: 'کاربر آزمایشی',
       phone: '09121234567',
       province: '01',
-      answers: { q1: '1', q2: 'bachelor', q3: 'yes' },
+      answers: { q1: '1', q2: 'bachelor', q3: 'yes', role: 'پشتیبانی و ارتباط با متقاضیان' },
     }),
   });
   const response = await onRequest({ request, env: { DB: db } });
@@ -51,6 +51,22 @@ test('registration rejects an untrusted browser origin', async () => {
   const response = await onRequest({ request, env: {} });
   assert.equal(response.status, 403);
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('registration accepts only the role choices shown in the interface', async () => {
+  const { onRequest } = await importSource('functions/api/register.js');
+  const request = new Request('https://adlisho.online/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: 'https://adlisho.online' },
+    body: JSON.stringify({
+      name: 'کاربر آزمایشی',
+      phone: '09121234567',
+      province: '01',
+      answers: { q1: '1', q2: 'bachelor', q3: 'yes', role: 'مقدار دستکاری‌شده' },
+    }),
+  });
+  const response = await onRequest({ request, env: { DB: {} } });
+  assert.equal(response.status, 400);
 });
 
 test('registration rejects an oversized streamed body before JSON parsing', async () => {

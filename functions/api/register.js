@@ -5,6 +5,11 @@ const DEFAULT_ORIGINS = new Set([
 const VALID_PROVINCES = new Set(
   Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')),
 );
+const VALID_ROLES = new Set([
+  'پشتیبانی و ارتباط با متقاضیان',
+  'هماهنگی و عملیات اداری',
+  'فنی و توسعه بازار',
+]);
 
 function allowedOrigins(env) {
   const origins = new Set(DEFAULT_ORIGINS);
@@ -66,6 +71,7 @@ async function notifyRegistration(env, record) {
       `سابقه: ${record.answers.q1}`,
       `تحصیلات: ${record.answers.q2}`,
       `شیفت: ${record.answers.q3}`,
+      `حوزه انتخابی: ${record.answers.role}`,
     ].join('\n');
     const targets = [
       ['telegram', 'https://api.telegram.org/bot'],
@@ -156,6 +162,7 @@ export async function onRequest({ request, env, waitUntil }) {
   const phone = String(data.phone || '').replace(/\D/g, '');
   const province = String(data.province || '').trim();
   const answers = data.answers && typeof data.answers === 'object' ? data.answers : {};
+  const role = String(answers.role || '').trim();
   if (
     name.length < 3
     || name.length > 80
@@ -173,6 +180,7 @@ export async function onRequest({ request, env, waitUntil }) {
     !['0', '1', '3', '6'].includes(String(answers.q1))
     || !['diploma', 'bachelor', 'master'].includes(answers.q2)
     || !['yes', 'no'].includes(answers.q3)
+    || !VALID_ROLES.has(role)
   ) {
     return json({ ok: false, error: 'پاسخ‌های ارزیابی کامل نیست.' }, 400, corsOrigin);
   }
@@ -205,7 +213,7 @@ export async function onRequest({ request, env, waitUntil }) {
       name,
       phone,
       province,
-      JSON.stringify({ q1: String(answers.q1), q2: answers.q2, q3: answers.q3 }),
+      JSON.stringify({ q1: String(answers.q1), q2: answers.q2, q3: answers.q3, role }),
       ip,
       tracking,
     ).run();
@@ -214,7 +222,7 @@ export async function onRequest({ request, env, waitUntil }) {
       name,
       phone,
       province,
-      answers: { q1: String(answers.q1), q2: answers.q2, q3: answers.q3 },
+      answers: { q1: String(answers.q1), q2: answers.q2, q3: answers.q3, role },
       tracking,
     });
     if (typeof waitUntil === 'function') waitUntil(notification);
