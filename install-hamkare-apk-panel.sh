@@ -111,7 +111,8 @@ fi
 chown www-data:www-data "$CONFIG_FILE"
 chmod 0600 "$CONFIG_FILE"
 
-for state_file in admin-audit.jsonl admin-login-rate.json admin-login-rate.lock admin-config.lock apk-last-deployment.json; do
+rm -f -- "$STATE_ROOT/admin-login-rate.json" "$STATE_ROOT/admin-login-rate.lock"
+for state_file in admin-audit.jsonl admin-config.lock apk-last-deployment.json; do
   touch "$STATE_ROOT/$state_file"
   chown www-data:www-data "$STATE_ROOT/$state_file"
   chmod 0600 "$STATE_ROOT/$state_file"

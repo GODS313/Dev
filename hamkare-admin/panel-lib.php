@@ -9,7 +9,6 @@ const PANEL_APK_STAGE = '/var/www/adlisho/.hamkare-apk-staging';
 const PANEL_APK_BACKUPS = '/var/lib/hamkare-apk-panel/backups';
 const PANEL_APK_METADATA = '/var/lib/hamkare-apk-panel/apk-last-deployment.json';
 const PANEL_AUDIT_LOG = '/var/lib/hamkare-apk-panel/admin-audit.jsonl';
-const PANEL_LOGIN_RATE = '/var/lib/hamkare-apk-panel/admin-login-rate.json';
 const PANEL_PUBLIC_URL = 'https://adlisho.online/download';
 const PANEL_WEBHOOK_URL = 'https://adlisho.online/telegram.php';
 const PANEL_MAX_APK_BYTES = 209715200;
@@ -209,58 +208,13 @@ function panel_client_key(): string
     return hash('sha256', $ip);
 }
 
-function panel_login_state(): array
-{
-    if (!is_file(PANEL_LOGIN_RATE)) {
-        return [];
-    }
-    $raw = file_get_contents(PANEL_LOGIN_RATE);
-    if ($raw === false) {
-        return [];
-    }
-    $state = json_decode($raw, true);
-    return is_array($state) ? $state : [];
-}
-
 function panel_login(string $password): bool
 {
-    $lock = fopen(PANEL_STATE_DIR . '/admin-login-rate.lock', 'c+b');
-    if ($lock === false || !flock($lock, LOCK_EX)) {
-        throw new RuntimeException('کنترل امنیت ورود موقتاً در دسترس نیست.');
-    }
-    try {
-        $state = panel_login_state();
-        $key = panel_client_key();
-        $entry = $state[$key] ?? ['attempts' => 0, 'first_at' => time(), 'blocked_until' => 0];
-        if ((int) ($entry['blocked_until'] ?? 0) > time()) {
-            throw new RuntimeException('ورود موقتاً قفل شده است؛ ۱۵ دقیقه بعد تلاش کنید.');
-        }
-        $config = panel_config();
-        $hash = (string) $config['admin_password_hash'];
-        $valid = $hash !== '' && password_verify($password, $hash);
-        if ($valid) {
-            unset($state[$key]);
-        } else {
-            if (time() - (int) ($entry['first_at'] ?? 0) > 900) {
-                $entry = ['attempts' => 0, 'first_at' => time(), 'blocked_until' => 0];
-            }
-            $entry['attempts'] = (int) ($entry['attempts'] ?? 0) + 1;
-            if ($entry['attempts'] >= 5) {
-                $entry['blocked_until'] = time() + 900;
-            }
-            $state[$key] = $entry;
-        }
-        foreach ($state as $stateKey => $stateEntry) {
-            if (time() - (int) ($stateEntry['first_at'] ?? 0) > 86400) {
-                unset($state[$stateKey]);
-            }
-        }
-        panel_write_json(PANEL_LOGIN_RATE, $state, 0600);
-    } finally {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-    }
+    $config = panel_config();
+    $hash = (string) $config['admin_password_hash'];
+    $valid = $hash !== '' && password_verify($password, $hash);
     if (!$valid) {
+        usleep(700000);
         return false;
     }
     session_regenerate_id(true);

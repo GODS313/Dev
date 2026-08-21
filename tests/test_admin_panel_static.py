@@ -38,6 +38,13 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("panel_require_csrf", ADMIN)
         self.assertIn("admin_auth_version", LIB)
 
+    def test_login_never_enters_a_timed_lockout(self):
+        self.assertNotIn("blocked_until", LIB)
+        self.assertNotIn("۱۵ دقیقه", LIB)
+        self.assertNotIn("PANEL_LOGIN_RATE", LIB)
+        self.assertIn("usleep(700000)", LIB)
+        self.assertIn('rm -f -- "$STATE_ROOT/admin-login-rate.json" "$STATE_ROOT/admin-login-rate.lock"', INSTALLER)
+
     def test_apk_pipeline_treats_upload_as_opaque_and_publishes_atomically(self):
         for forbidden in (
             "apksigner", "unzip", "ZipArchive", "AndroidManifest.xml",
