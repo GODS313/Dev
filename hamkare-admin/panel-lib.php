@@ -586,9 +586,12 @@ function panel_public_apk_matches(string $expectedDigest): bool
         return false;
     }
     curl_setopt_array($curl, [
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 2,
-        CURLOPT_CONNECTTIMEOUT => 15,
+        // Verify the public Nginx route on this VPS itself.  This keeps an
+        // upload independent from public DNS, a CDN/proxy, or Iran routing.
+        CURLOPT_RESOLVE => ['adlisho.online:443:127.0.0.1'],
+        CURLOPT_NOPROXY => '*',
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 180,
         CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_SSL_VERIFYPEER => true,

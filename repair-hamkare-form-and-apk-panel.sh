@@ -61,11 +61,29 @@ location = /api/register {
 
 location = /admin/apk.php {
     client_max_body_size 205m;
+    client_body_timeout 300s;
     include fastcgi_params;
     fastcgi_param SCRIPT_FILENAME /var/www/adlisho/admin/apk.php;
     fastcgi_param SCRIPT_NAME /admin/apk.php;
     fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    fastcgi_connect_timeout 30s;
+    fastcgi_send_timeout 300s;
     fastcgi_read_timeout 300s;
+}
+
+# Serve the APK directly from this VPS. Nginx provides byte ranges itself,
+# so downloads and panel verification do not consume a PHP-FPM worker.
+location = /download {
+    alias /var/www/adlisho/app.apk;
+    default_type application/vnd.android.package-archive;
+    add_header Content-Disposition 'attachment; filename="hamkare.apk"' always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Cache-Control 'public, max-age=300' always;
+}
+
+location = /download/ {
+    return 308 /download;
 }
 
 # Never expose PHP source through the static-file fallback.
@@ -168,10 +186,13 @@ source_code="$(curl -sS --connect-timeout 10 --max-time 20 --resolve adlisho.onl
 [[ "$source_code" == 404 ]] || { echo "محافظت سورس PHP پاسخ HTTP $source_code داد." >&2; exit 1; }
 panel_type="$(curl -sSI --connect-timeout 10 --max-time 20 --resolve adlisho.online:443:127.0.0.1 https://adlisho.online/admin/apk.php | tr -d '\r' | awk 'tolower($1)=="content-type:"{print tolower($2);exit}')"
 [[ "$panel_type" == text/html* ]] || { echo "پنل با Content-Type نامعتبر پاسخ داد: $panel_type" >&2; exit 1; }
+download_code="$(curl -sS --connect-timeout 10 --max-time 30 --resolve adlisho.online:443:127.0.0.1 -o "$WORK_DIR/download.apk" -w '%{http_code}' https://adlisho.online/download)"
+[[ "$download_code" == 200 ]] || { echo "لینک مستقیم APK پاسخ HTTP $download_code داد." >&2; exit 1; }
+cmp -s /var/www/adlisho/app.apk "$WORK_DIR/download.apk" || { echo 'فایل لینک دانلود با APK سرور یکسان نیست.' >&2; exit 1; }
 
 REPAIR_COMPLETE=1
 echo '✅ فرم ثبت درخواست فعال شد.'
 echo '✅ دانلود سورس PHP مسدود شد.'
 echo '✅ پنل آپلود APK فعال شد: https://adlisho.online/admin/apk.php'
-echo '✅ لینک ثابت APK: https://adlisho.online/download'
+echo '✅ لینک ثابت APK مستقیماً از همین VPS: https://adlisho.online/download'
 echo "بکاپ تنظیمات: $BACKUP_DIR"

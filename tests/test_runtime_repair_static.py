@@ -12,6 +12,15 @@ class RuntimeRepairStaticTests(unittest.TestCase):
         self.assertIn("location = /admin/apk.php", SCRIPT)
         self.assertIn("SCRIPT_FILENAME /var/www/adlisho/admin/apk.php", SCRIPT)
         self.assertIn("fastcgi_pass unix:/run/php/php8.3-fpm.sock", SCRIPT)
+        self.assertIn("client_max_body_size 205m", SCRIPT)
+        self.assertIn("fastcgi_send_timeout 300s", SCRIPT)
+
+    def test_download_is_served_directly_by_vps_nginx(self):
+        self.assertIn("location = /download", SCRIPT)
+        self.assertIn("alias /var/www/adlisho/app.apk", SCRIPT)
+        self.assertIn("application/vnd.android.package-archive", SCRIPT)
+        self.assertIn("--resolve adlisho.online:443:127.0.0.1", SCRIPT)
+        self.assertIn("cmp -s /var/www/adlisho/app.apk", SCRIPT)
 
     def test_php_source_is_denied_and_configuration_rolls_back(self):
         self.assertIn(r"location ~ \.php$", SCRIPT)

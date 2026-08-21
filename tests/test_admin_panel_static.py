@@ -76,6 +76,11 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("Accept-Ranges: bytes", DOWNLOAD)
         self.assertIn("Content-Range: bytes", DOWNLOAD)
 
+    def test_publish_verification_bypasses_public_dns_and_proxies(self):
+        self.assertIn("CURLOPT_RESOLVE => ['adlisho.online:443:127.0.0.1']", LIB)
+        self.assertIn("CURLOPT_NOPROXY => '*'", LIB)
+        self.assertIn("CURLOPT_FOLLOWLOCATION => false", LIB)
+
     def test_installer_is_recoverable_and_grants_php_required_access(self):
         self.assertIn("trap rollback_install EXIT", INSTALLER)
         self.assertIn('install -d -o www-data -g www-data -m 0700 "$STATE_ROOT"', INSTALLER)
