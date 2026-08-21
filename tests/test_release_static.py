@@ -70,13 +70,14 @@ class ReleaseStaticTests(unittest.TestCase):
         self.assertEqual(installer.count("DOWNLOAD_URL=$DOWNLOAD_URL"), 2)
         self.assertIn('for platform in telegram bale', installer)
 
-    def test_stable_webview_routes_and_age_gate_exist(self):
+    def test_stable_webview_routes_and_self_hosted_hamkare_ui_exist(self):
         redirects = (ROOT / "_redirects").read_text(encoding="utf-8")
         index = (ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn("/app/* /result.html 200", redirects)
         self.assertIn("/register/* /index.html 200", redirects)
         self.assertIn("/exam/* /index.html 200", redirects)
-        self.assertIn("تأیید می‌کنم؛ بالای ۱۸ سال هستم", index)
+        self.assertIn("همکاری حرفه‌ای با هویت ایرانی", index)
+        self.assertIn("/assets/hamkare-sites.css", index)
         self.assertIn("https://t.me/Pasokh313e_bot", index)
         self.assertIn("https://ble.ir/Hamkarebot", index)
 

@@ -49,7 +49,7 @@ install -d -o www-data -g www-data -m 0755 "$WEB_ROOT/assets"
 for image in team.jpg office.jpg industry.jpg; do
   install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/assets/$image" "$WEB_ROOT/assets/$image"
 done
-for asset in hamkare-ui.css hamkare-selfhosted.css hamkare-ui.js hamkare-hero.webp hamkare-work.webp; do
+for asset in hamkare-ui.css hamkare-selfhosted.css hamkare-ui.js hamkare-sites.css hamkare-sites.js hamkare-hero.webp hamkare-work.webp hamkare-industry.webp; do
   install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/assets/$asset" "$WEB_ROOT/assets/$asset"
 done
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/manifest.json" "$WEB_ROOT/manifest.json"
