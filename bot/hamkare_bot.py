@@ -48,7 +48,7 @@ IRAN_ROUTE_PATHS = (
     ("اپ", "/app/"),
     ("سلامت API", "/est/api/health"),
     ("نسخه API", "/est/api/version"),
-    ("دانلود", "/download.php"),
+    ("دانلود", "/download"),
 )
 APK_MIME_TYPES = {
     "application/vnd.android.package-archive",

@@ -28,6 +28,12 @@ class IranCompatibilityRouteTests(unittest.TestCase):
         self.assertNotIn("ThreadPoolExecutor", source)
         self.assertIn("time.sleep(0.4)", source)
 
+    def test_probe_checks_the_canonical_apk_route(self):
+        source = (ROOT / "bot" / "hamkare_bot.py").read_text(encoding="utf-8")
+        routes = source.split("IRAN_ROUTE_PATHS = (", 1)[1].split("\n)", 1)[0]
+        self.assertIn('(\"دانلود\", \"/download\")', routes)
+        self.assertNotIn("/download.php", routes)
+
 
 if __name__ == "__main__":
     unittest.main()

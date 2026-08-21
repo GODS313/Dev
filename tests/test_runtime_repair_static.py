@@ -22,6 +22,13 @@ class RuntimeRepairStaticTests(unittest.TestCase):
         self.assertIn("--resolve adlisho.online:443:127.0.0.1", SCRIPT)
         self.assertIn("cmp -s /var/www/adlisho/app.apk", SCRIPT)
 
+    def test_public_compatibility_routes_are_installed_and_verified(self):
+        for route in ("/register/", "/exam/", "/app/"):
+            self.assertIn(route, SCRIPT)
+        self.assertIn("location = /download.php", SCRIPT)
+        self.assertIn("return 302 /download", SCRIPT)
+        self.assertIn("for public_path in register/ exam/ app/", SCRIPT)
+
     def test_php_source_is_denied_and_configuration_rolls_back(self):
         self.assertIn(r"location ~ \.php$", SCRIPT)
         self.assertIn("return 404;", SCRIPT)

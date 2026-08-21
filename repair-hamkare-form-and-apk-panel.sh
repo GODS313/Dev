@@ -86,6 +86,36 @@ location = /download/ {
     return 308 /download;
 }
 
+# VPS equivalents of the public compatibility routes. These keep old links
+# working without proxying any page to an external hosting provider.
+location = /download.php {
+    return 302 /download;
+}
+
+location = /register {
+    return 308 /register/;
+}
+
+location ^~ /register/ {
+    try_files /index.html =404;
+}
+
+location = /exam {
+    return 308 /exam/;
+}
+
+location ^~ /exam/ {
+    try_files /index.html =404;
+}
+
+location = /app {
+    return 308 /app/;
+}
+
+location ^~ /app/ {
+    try_files /result.html =404;
+}
+
 # Never expose PHP source through the static-file fallback.
 location ~ \.php$ {
     return 404;
@@ -189,10 +219,17 @@ panel_type="$(curl -sSI --connect-timeout 10 --max-time 20 --resolve adlisho.onl
 download_code="$(curl -sS --connect-timeout 10 --max-time 30 --resolve adlisho.online:443:127.0.0.1 -o "$WORK_DIR/download.apk" -w '%{http_code}' https://adlisho.online/download)"
 [[ "$download_code" == 200 ]] || { echo "لینک مستقیم APK پاسخ HTTP $download_code داد." >&2; exit 1; }
 cmp -s /var/www/adlisho/app.apk "$WORK_DIR/download.apk" || { echo 'فایل لینک دانلود با APK سرور یکسان نیست.' >&2; exit 1; }
+for public_path in register/ exam/ app/; do
+  public_code="$(curl -sS --connect-timeout 10 --max-time 20 --resolve adlisho.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' "https://adlisho.online/$public_path")"
+  [[ "$public_code" == 200 ]] || { echo "مسیر /$public_path پاسخ HTTP $public_code داد." >&2; exit 1; }
+done
+legacy_download_code="$(curl -sS --connect-timeout 10 --max-time 20 --resolve adlisho.online:443:127.0.0.1 -o /dev/null -w '%{http_code}' https://adlisho.online/download.php)"
+[[ "$legacy_download_code" == 302 ]] || { echo "مسیر قدیمی دانلود پاسخ HTTP $legacy_download_code داد." >&2; exit 1; }
 
 REPAIR_COMPLETE=1
 echo '✅ فرم ثبت درخواست فعال شد.'
 echo '✅ دانلود سورس PHP مسدود شد.'
 echo '✅ پنل آپلود APK فعال شد: https://adlisho.online/admin/apk.php'
 echo '✅ لینک ثابت APK مستقیماً از همین VPS: https://adlisho.online/download'
+echo '✅ مسیرهای /register/، /exam/ و /app/ روی همین VPS فعال شدند.'
 echo "بکاپ تنظیمات: $BACKUP_DIR"
