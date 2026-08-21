@@ -76,10 +76,12 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("Accept-Ranges: bytes", DOWNLOAD)
         self.assertIn("Content-Range: bytes", DOWNLOAD)
 
-    def test_publish_verification_bypasses_public_dns_and_proxies(self):
-        self.assertIn("CURLOPT_RESOLVE => ['adlisho.online:443:127.0.0.1']", LIB)
-        self.assertIn("CURLOPT_NOPROXY => '*'", LIB)
-        self.assertIn("CURLOPT_FOLLOWLOCATION => false", LIB)
+    def test_publish_verification_has_no_network_dependency(self):
+        verify = LIB.split("function panel_public_apk_matches", 1)[1].split("function panel_restore_rejected", 1)[0]
+        self.assertIn("hash_file('sha256', PANEL_APK_LIVE)", verify)
+        self.assertNotIn("curl_", verify)
+        publish = LIB.split("function panel_publish_upload", 1)[1].split("function panel_latest_backup", 1)[0]
+        self.assertNotIn("panel_notify", publish)
 
     def test_installer_is_recoverable_and_grants_php_required_access(self):
         self.assertIn("trap rollback_install EXIT", INSTALLER)

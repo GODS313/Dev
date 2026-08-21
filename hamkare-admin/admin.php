@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 panel_flash(
                     'success',
-                    'APK منتشر و لینک عمومی تأیید شد. SHA-256: ' . substr((string) $result['sha256'], 0, 16) . '…'
+                    'APK روی سرور جایگزین شد و لینک مستقیم آماده است. SHA-256: ' . substr((string) $result['sha256'], 0, 16) . '…'
                 );
             }
             redirect_panel();
@@ -154,7 +154,7 @@ if ($authenticated) {
     <?php if ($status): ?><div class="grid">
       <section class="card">
         <h2>آپلود دستی APK توسط مدیر</h2>
-        <p class="lead">فایل دقیقاً بدون بازکردن، تغییر یا بررسی امضا جایگزین می‌شود. فقط نام ‎.apk، محدوده حجم و تطبیق SHA-256 لینک عمومی کنترل می‌شود.</p>
+        <p class="lead">فایل دقیقاً بدون بازکردن، تغییر یا بررسی امضا جایگزین می‌شود. فقط نام ‎.apk، محدوده حجم و تطبیق SHA-256 روی همین سرور کنترل می‌شود.</p>
         <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="upload_apk"><input type="hidden" name="MAX_FILE_SIZE" value="209715200">
           <div class="field"><label for="apk_file">فایل APK، حداکثر ۲۰۰ MB</label><input id="apk_file" name="apk_file" type="file" accept=".apk,application/vnd.android.package-archive" required></div>

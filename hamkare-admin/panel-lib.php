@@ -570,61 +570,17 @@ function panel_prune_backups(): void
 
 function panel_public_apk_matches(string $expectedDigest): bool
 {
-    if (!function_exists('curl_init')) {
+    // /download is an exact Nginx alias to PANEL_APK_LIVE. Verify locally so
+    // an upload never waits for DNS, TLS, a proxy/CDN, or another PHP worker.
+    if (!is_file(PANEL_APK_LIVE) || is_link(PANEL_APK_LIVE)) {
         return false;
     }
-    $temporary = panel_unique_stage('public-verify');
-    $handle = fopen($temporary, 'w+b');
-    if ($handle === false) {
+    $size = filesize(PANEL_APK_LIVE);
+    if ($size === false || $size < 1024 || $size > PANEL_MAX_APK_BYTES) {
         return false;
     }
-    $received = 0;
-    $curl = curl_init(PANEL_PUBLIC_URL . '?verify=' . rawurlencode(substr($expectedDigest, 0, 16)));
-    if ($curl === false) {
-        fclose($handle);
-        @unlink($temporary);
-        return false;
-    }
-    curl_setopt_array($curl, [
-        // Verify the public Nginx route on this VPS itself.  This keeps an
-        // upload independent from public DNS, a CDN/proxy, or Iran routing.
-        CURLOPT_RESOLVE => ['adlisho.online:443:127.0.0.1'],
-        CURLOPT_NOPROXY => '*',
-        CURLOPT_FOLLOWLOCATION => false,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 180,
-        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_HTTPHEADER => ['Cache-Control: no-cache', 'Accept: application/vnd.android.package-archive'],
-        CURLOPT_WRITEFUNCTION => static function ($curlHandle, string $chunk) use ($handle, &$received): int {
-            $received += strlen($chunk);
-            if ($received > PANEL_MAX_APK_BYTES) {
-                return 0;
-            }
-            $written = fwrite($handle, $chunk);
-            return $written === false ? 0 : $written;
-        },
-    ]);
-    $ok = curl_exec($curl);
-    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-    $type = strtolower((string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
-    $effectiveUrl = (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
-    curl_close($curl);
-    fflush($handle);
-    fclose($handle);
-    $digest = is_file($temporary) ? hash_file('sha256', $temporary) : false;
-    @unlink($temporary);
-    return $ok !== false
-        && $status === 200
-        && $received > 0
-        && $received <= PANEL_MAX_APK_BYTES
-        && !str_contains($type, 'text/html')
-        && !str_contains($type, 'application/json')
-        && parse_url($effectiveUrl, PHP_URL_SCHEME) === 'https'
-        && parse_url($effectiveUrl, PHP_URL_HOST) === 'adlisho.online'
-        && is_string($digest)
-        && hash_equals($expectedDigest, $digest);
+    $digest = hash_file('sha256', PANEL_APK_LIVE);
+    return is_string($digest) && hash_equals($expectedDigest, $digest);
 }
 
 function panel_restore_rejected(string $rejectedDigest, ?string $previousBackup): bool
@@ -742,12 +698,7 @@ function panel_publish_upload(array $upload): array
             'sha256' => $validation['sha256'],
             'size' => $validation['size'],
         ]);
-        panel_notify(
-            "✅ APK همکاره از پنل وب منتشر شد.\n"
-            . 'حجم: ' . number_format($validation['size'] / 1048576, 2) . " MB\n"
-            . 'SHA-256: ' . substr($validation['sha256'], 0, 16) . "…\n"
-            . PANEL_PUBLIC_URL
-        );
+        // Never wait for Telegram or another network inside an upload POST.
         return $validation + ['duplicate' => false];
     } finally {
         if ($staged !== '' && is_file($staged)) {
@@ -819,10 +770,7 @@ function panel_rollback_latest(): array
             throw new RuntimeException('ثبت وضعیت rollback و بازگردانی هر دو ناموفق شدند؛ سرور فوراً بررسی شود.', 0, $metadataError);
         }
         panel_audit('apk_rolled_back', ['sha256' => $validation['sha256']]);
-        panel_notify(
-            "↩️ نسخه قبلی APK از پنل وب بازگردانده شد.\n"
-            . 'SHA-256: ' . substr($validation['sha256'], 0, 16) . '…'
-        );
+        // Rollback is intentionally independent from external networks too.
         return $validation;
     } finally {
         if ($staged !== '' && is_file($staged)) {
