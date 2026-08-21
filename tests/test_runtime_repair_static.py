@@ -28,6 +28,8 @@ class RuntimeRepairStaticTests(unittest.TestCase):
         self.assertIn("location = /download.php", SCRIPT)
         self.assertIn("return 302 /download", SCRIPT)
         self.assertIn("for public_path in register/ exam/ app/", SCRIPT)
+        self.assertIn("location\\s*=\\s*/download\\.php", SCRIPT)
+        self.assertIn("legacy_end = closing_brace", SCRIPT)
 
     def test_php_source_is_denied_and_configuration_rolls_back(self):
         self.assertIn(r"location ~ \.php$", SCRIPT)

@@ -136,8 +136,6 @@ import os, re, sys, tempfile
 path = sys.argv[1]
 include_line = '    include /etc/nginx/snippets/hamkare-runtime-locations.conf;'
 text = open(path, encoding='utf-8').read()
-if include_line.strip() in text:
-    raise SystemExit(0)
 
 def closing_brace(source, opening):
     depth = 0
@@ -176,11 +174,28 @@ for match in re.finditer(r'(?m)^\s*server\s*\{', text):
     end = closing_brace(text, opening)
     block = text[match.start():end + 1]
     if re.search(r'\blisten\s+[^;]*443\b', block) and re.search(r'\bserver_name\s+[^;]*\badlisho\.online\b', block):
-        matches.append(end)
+        matches.append((match.start(), end))
 if len(matches) != 1:
     raise RuntimeError(f'باید دقیقاً یک server block HTTPS برای adlisho.online پیدا شود؛ تعداد: ${len(matches)}')
-position = matches[0]
-updated = text[:position].rstrip() + '\n\n' + include_line + '\n' + text[position:]
+server_start, server_end = matches[0]
+block = text[server_start:server_end + 1]
+
+# Older deployments execute /download.php directly. Remove that exact block
+# from the HTTPS vhost so the managed snippet can own it and redirect quickly.
+legacy = list(re.finditer(r'(?m)^\s*location\s*=\s*/download\.php\s*\{', block))
+if len(legacy) > 1:
+    raise RuntimeError('بیش از یک location قدیمی /download.php پیدا شد.')
+if legacy:
+    legacy_start = legacy[0].start()
+    legacy_opening = block.find('{', legacy[0].start())
+    legacy_end = closing_brace(block, legacy_opening)
+    block = block[:legacy_start].rstrip() + '\n\n' + block[legacy_end + 1:].lstrip()
+
+if include_line.strip() not in block:
+    block = block[:-1].rstrip() + '\n\n' + include_line + '\n}'
+updated = text[:server_start] + block + text[server_end + 1:]
+if updated == text:
+    raise SystemExit(0)
 fd, temporary = tempfile.mkstemp(prefix='.adlisho-nginx-', dir=os.path.dirname(path))
 try:
     os.fchmod(fd, os.stat(path).st_mode & 0o777)
