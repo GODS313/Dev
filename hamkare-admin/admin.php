@@ -118,13 +118,13 @@ if ($authenticated) {
     <section class="login">
       <div class="mark">هم</div>
       <h1>پنل مدیریت همکاره</h1>
-      <p>مدیریت مستقیم فایل APK همکاره روی سرور Adlisho</p>
+      <p>اگر هنوز رمزی تنظیم نشده باشد، اولین رمز واردشده همان رمز پنل خواهد شد.</p>
       <?php if ($flash): ?><div class="notice <?= h($flash['type']) ?>"><?= h($flash['message']) ?></div><?php endif; ?>
       <form method="post" autocomplete="off">
         <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
         <input type="hidden" name="action" value="login">
         <label for="password">رمز مدیریت</label>
-        <input id="password" name="password" type="password" minlength="12" maxlength="200" autocomplete="current-password" required autofocus>
+        <input id="password" name="password" type="password" minlength="8" maxlength="200" autocomplete="current-password" required autofocus>
         <button class="button" type="submit">ورود امن</button>
       </form>
     </section>

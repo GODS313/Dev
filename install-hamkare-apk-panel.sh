@@ -118,21 +118,9 @@ for state_file in admin-audit.jsonl admin-config.lock apk-last-deployment.json; 
   chmod 0600 "$STATE_ROOT/$state_file"
 done
 
-has_password_hash="$(php -r '$j=json_decode(file_get_contents($argv[1]),true,32,JSON_THROW_ON_ERROR);echo empty($j["admin_password_hash"])?"no":"yes";' "$CONFIG_FILE")"
 panel_password="${PANEL_ADMIN_PASSWORD:-}"
-if [[ -z "$panel_password" && -t 0 ]]; then
-  if [[ "$has_password_hash" == yes ]]; then
-    read -rsp 'برای حفظ رمز فعلی Enter بزنید؛ برای تغییر، رمز جدید حداقل ۱۲ نویسه را وارد کنید: ' panel_password; echo
-  else
-    read -rsp 'یک رمز جدید حداقل ۱۲ نویسه برای آپلود دستی APK وارد کنید: ' panel_password; echo
-  fi
-fi
 if [[ -n "$panel_password" ]]; then
-  if [[ -t 0 ]]; then
-    read -rsp 'رمز جدید را دوباره وارد کنید: ' panel_password_confirm; echo
-    [[ "$panel_password" == "$panel_password_confirm" ]] || { echo 'دو رمز یکسان نیستند.' >&2; exit 1; }
-  fi
-  [[ ${#panel_password} -ge 12 ]] || { echo 'رمز باید حداقل ۱۲ نویسه باشد.' >&2; exit 1; }
+  [[ ${#panel_password} -ge 8 ]] || { echo 'رمز باید حداقل ۸ نویسه باشد.' >&2; exit 1; }
   PANEL_PASSWORD_VALUE="$panel_password" php -r '
     $path=$argv[1];
     $config=json_decode(file_get_contents($path),true,32,JSON_THROW_ON_ERROR);
@@ -143,11 +131,8 @@ if [[ -n "$panel_password" ]]; then
     file_put_contents($tmp,json_encode($config,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)."\n",LOCK_EX);
     chmod($tmp,0600);chown($tmp,"www-data");chgrp($tmp,"www-data");rename($tmp,$path);
   ' "$CONFIG_FILE"
-elif [[ "$has_password_hash" != yes ]]; then
-  echo 'رمز پنل تنظیم نشده و ورودی تعاملی در دسترس نیست.' >&2
-  exit 1
 fi
-unset panel_password panel_password_confirm PANEL_ADMIN_PASSWORD PANEL_PASSWORD_VALUE
+unset panel_password PANEL_ADMIN_PASSWORD PANEL_PASSWORD_VALUE
 
 runuser -u www-data -- test -r "$CONFIG_FILE" || { echo 'PHP امکان خواندن config را ندارد.' >&2; exit 1; }
 runuser -u www-data -- test -w "$CONFIG_FILE" || { echo 'PHP امکان تغییر config را ندارد.' >&2; exit 1; }

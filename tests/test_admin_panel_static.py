@@ -45,6 +45,14 @@ class AdminPanelStaticTests(unittest.TestCase):
         self.assertIn("usleep(700000)", LIB)
         self.assertIn('rm -f -- "$STATE_ROOT/admin-login-rate.json" "$STATE_ROOT/admin-login-rate.lock"', INSTALLER)
 
+    def test_first_login_atomically_sets_the_initial_password(self):
+        self.assertIn("admin_password_initialized", LIB)
+        self.assertIn("panel_config_lock()", LIB)
+        self.assertIn("password_hash($password, PASSWORD_DEFAULT)", LIB)
+        self.assertIn("رمز اولیه باید حداقل ۸ کاراکتر باشد", LIB)
+        self.assertNotIn("برای حفظ رمز فعلی Enter بزنید", INSTALLER)
+        self.assertIn('minlength="8"', ADMIN)
+
     def test_apk_pipeline_treats_upload_as_opaque_and_publishes_atomically(self):
         for forbidden in (
             "apksigner", "unzip", "ZipArchive", "AndroidManifest.xml",

@@ -212,6 +212,25 @@ function panel_login(string $password): bool
 {
     $config = panel_config();
     $hash = (string) $config['admin_password_hash'];
+    $initialized = false;
+    if ($hash === '') {
+        if (strlen($password) < 8) {
+            throw new RuntimeException('رمز اولیه باید حداقل ۸ کاراکتر باشد.');
+        }
+        $configLock = panel_config_lock();
+        try {
+            $config = panel_config();
+            $hash = (string) $config['admin_password_hash'];
+            if ($hash === '') {
+                $hash = password_hash($password, PASSWORD_DEFAULT);
+                $config['admin_password_hash'] = $hash;
+                panel_write_config($config);
+                $initialized = true;
+            }
+        } finally {
+            panel_release_config_lock($configLock);
+        }
+    }
     $valid = $hash !== '' && password_verify($password, $hash);
     if (!$valid) {
         usleep(700000);
@@ -222,6 +241,9 @@ function panel_login(string $password): bool
     $_SESSION['admin_last_seen'] = time();
     $_SESSION['admin_auth_version'] = hash('sha256', $hash);
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    if ($initialized) {
+        panel_audit('admin_password_initialized');
+    }
     return true;
 }
 
