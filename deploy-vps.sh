@@ -9,7 +9,7 @@ flock -n 9 || { echo 'Another Hamkare deployment is already running.' >&2; exit 
 
 WEB_ROOT="${WEB_ROOT:-/var/www/adlisho}"
 REPO_URL="https://github.com/GODS313/Dev.git"
-REPO_BRANCH="main"
+REPO_BRANCH="${REPO_BRANCH:-main}"
 TMP_DIR="$(mktemp -d)"
 BACKUP_DIR="/var/backups/adlisho-$(date +%Y%m%d-%H%M%S)"
 
@@ -43,10 +43,14 @@ fi
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/result.html" "$WEB_ROOT/result.html"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/config.json" "$WEB_ROOT/config.json"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/favicon.svg" "$WEB_ROOT/favicon.svg"
+install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/logo.svg" "$WEB_ROOT/logo.svg"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/qr-download.png" "$WEB_ROOT/qr-download.png"
 install -d -o www-data -g www-data -m 0755 "$WEB_ROOT/assets"
 for image in team.jpg office.jpg industry.jpg; do
   install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/assets/$image" "$WEB_ROOT/assets/$image"
+done
+for asset in hamkare-ui.css hamkare-selfhosted.css hamkare-ui.js hamkare-hero.webp hamkare-work.webp; do
+  install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/assets/$asset" "$WEB_ROOT/assets/$asset"
 done
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/manifest.json" "$WEB_ROOT/manifest.json"
 install -o www-data -g www-data -m 0644 "$TMP_DIR/repo/privacy.html" "$WEB_ROOT/privacy.html"
