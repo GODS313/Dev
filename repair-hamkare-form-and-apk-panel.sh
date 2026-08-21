@@ -108,10 +108,6 @@ location ^~ /exam/ {
     try_files /index.html =404;
 }
 
-location = /app {
-    return 308 /app/;
-}
-
 location ^~ /app/ {
     try_files /result.html =404;
 }
