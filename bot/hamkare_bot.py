@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -18,6 +19,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -214,10 +216,26 @@ def format_iran_route_report(site_url: str) -> str:
     return "\n".join(lines)
 
 
+def parse_apk_allowed_chat_ids(value: str) -> frozenset[str]:
+    if not value.strip():
+        return frozenset()
+    values = {item.strip() for item in value.split(",") if item.strip()}
+    if any(not re.fullmatch(r"-100\d{7,26}", item) for item in values):
+        raise ValueError("APK_ALLOWED_CHAT_IDS must contain Telegram supergroup IDs")
+    return frozenset(values)
+
+
 def can_upload_apk(
-    platform: str, user_id: str, admin_ids: frozenset[str], enabled: bool
+    platform: str,
+    user_id: str,
+    admin_ids: frozenset[str],
+    enabled: bool,
+    chat_id: object = "",
+    allowed_chat_ids: frozenset[str] = frozenset(),
 ) -> bool:
-    return platform in {"telegram", "bale"} and enabled and user_id in admin_ids
+    if platform != "telegram" or not enabled:
+        return False
+    return user_id in admin_ids or str(chat_id) in allowed_chat_ids
 
 
 def sha256_file(path: Path) -> str:
@@ -226,6 +244,35 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def validate_apk_file(path: Path) -> bool:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            if "AndroidManifest.xml" not in names:
+                raise ValueError("فایل AndroidManifest.xml ندارد.")
+            if archive.testzip() is not None:
+                raise ValueError("ساختار ZIP/APK خراب است.")
+            if any(info.flag_bits & 0x1 for info in archive.infolist()):
+                raise ValueError("APK رمزگذاری‌شده پذیرفته نمی‌شود.")
+    except zipfile.BadZipFile as error:
+        raise ValueError("ساختار APK معتبر نیست.") from error
+
+    verifier = shutil.which("apksigner")
+    if verifier is None:
+        return False
+    result = subprocess.run(
+        [verifier, "verify", "--verbose", "--print-certs", str(path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=90,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError("امضای APK معتبر نیست.")
+    return True
 
 
 class SafeApkRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -297,6 +344,7 @@ class Config:
     max_apk_bytes: int
     apk_stage_dir: Path | None = None
     public_verify_enabled: bool = True
+    apk_allowed_chat_ids: frozenset[str] = frozenset()
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -381,6 +429,9 @@ class Config:
             max_apk_bytes=max_apk_bytes,
             apk_stage_dir=stage_dir,
             public_verify_enabled=public_verify_enabled,
+            apk_allowed_chat_ids=parse_apk_allowed_chat_ids(
+                os.environ.get("APK_ALLOWED_CHAT_IDS", "")
+            ),
         )
 
 
@@ -962,10 +1013,23 @@ class Bot:
             self.is_admin(user_id)
             and file_name.lower().endswith(".apk")
         )
-        if self.admin_state(user_id) != "awaiting_apk" and not direct_admin_upload:
+        direct_group_upload = (
+            str(chat_id) in self.config.apk_allowed_chat_ids
+            and file_name.lower().endswith(".apk")
+        )
+        if (
+            self.admin_state(user_id) != "awaiting_apk"
+            and not direct_admin_upload
+            and not direct_group_upload
+        ):
             return False
         if not can_upload_apk(
-            self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
+            self.config.platform,
+            user_id,
+            self.config.admin_ids,
+            self.config.apk_upload_enabled,
+            chat_id,
+            self.config.apk_allowed_chat_ids,
         ):
             self.clear_sessions(user_id)
             self.audit(user_id, "denied_apk_upload")
@@ -1027,6 +1091,7 @@ class Bot:
                 raise ValueError("اندازه واقعی فایل با اطلاعات تلگرام یکسان نیست.")
             temporary_path = Path(temporary_name)
             size = temporary_path.stat().st_size
+            signature_verified = validate_apk_file(temporary_path)
             digest = sha256_file(temporary_path)
             backup_dir = self.config.database_path.parent / "apk-backups"
             backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1098,7 +1163,8 @@ class Bot:
                 chat_id,
                 f"✅ فایل APK با موفقیت جایگزین شد.\n"
                 f"اندازه: {size / 1024 / 1024:.2f} MB\nSHA-256: {digest[:16]}…\n"
-                f"بررسی محتوای APK: غیرفعال\nتطبیق فایل با لینک عمومی: {public_text}\n\n"
+                f"ساختار APK: معتبر؛ بررسی امضا: {'تأیید شد' if signature_verified else 'apksigner نصب نیست'}\n"
+                f"تطبیق فایل با لینک عمومی: {public_text}\n\n"
                 f"لینک عمومی بدون تغییر باقی ماند:\n{self.config.download_url}",
                 self.admin_menu(),
             )
@@ -1286,10 +1352,19 @@ class Bot:
                 Path(temporary_name).unlink(missing_ok=True)
 
     def handle_message(self, message: dict) -> None:
-        if message.get("chat", {}).get("type") != "private":
+        chat = message.get("chat", {})
+        chat_id = chat.get("id")
+        if chat_id is None:
             return
-        chat_id = message["chat"]["id"]
         user_id = str(message.get("from", {}).get("id", chat_id))
+        if chat.get("type") != "private":
+            if (
+                self.config.platform == "telegram"
+                and str(chat_id) in self.config.apk_allowed_chat_ids
+                and message.get("document")
+            ):
+                self.handle_apk_upload(message, user_id, chat_id)
+            return
         if self.handle_apk_upload(message, user_id, chat_id):
             return
         text = normalize(message.get("text", ""))
