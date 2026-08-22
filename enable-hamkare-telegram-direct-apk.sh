@@ -141,6 +141,34 @@ systemctl restart hamkare-telegram.service
 sleep 4
 systemctl is-active --quiet hamkare-telegram.service
 
+BOT_TOKEN="$(sed -n 's/^BOT_TOKEN=//p' "$TELEGRAM_ENV" | tail -n 1)"
+python3 - "$BOT_TOKEN" "$ALLOWED_CHAT_IDS" <<'PY'
+import json
+import sys
+import urllib.request
+
+token, raw_chat_ids = sys.argv[1:]
+for chat_id in raw_chat_ids.split(","):
+    for method, payload in (
+        ("getChat", {"chat_id": chat_id}),
+        ("sendMessage", {
+            "chat_id": chat_id,
+            "text": "✅ اتصال گزارش و دریافت APK همکاره فعال شد. از این پس هر عضو همین گروه می‌تواند فایل APK را به‌صورت Document ارسال یا فوروارد کند.",
+            "disable_web_page_preview": True,
+        }),
+    ):
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/{method}",
+            data=json.dumps(payload, ensure_ascii=False).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            result = json.load(response)
+        if not result.get("ok"):
+            raise RuntimeError(f"Telegram rejected {method}")
+PY
+unset BOT_TOKEN
+
 INSTALL_COMPLETE=1
 echo "✅ دریافت APK از گروه $ALLOWED_CHAT_IDS برای همه اعضای همان گروه فعال شد."
 echo '✅ تنظیمات و سرویس بله تغییر نکرد.'
