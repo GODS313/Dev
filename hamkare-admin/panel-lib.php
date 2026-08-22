@@ -353,16 +353,9 @@ function panel_telegram_call(string $token, string $method, array $payload = [])
 
 function panel_set_webhook(string $token, string $secret): void
 {
-    $webhook = PANEL_WEBHOOK_URL . '?secret=' . rawurlencode($secret);
-    panel_telegram_call($token, 'setWebhook', [
-        'url' => $webhook,
-        'secret_token' => $secret,
-        'allowed_updates' => json_encode([
-            'message',
-            'channel_post',
-            'edited_channel_post',
-            'callback_query',
-        ], JSON_THROW_ON_ERROR),
+    // The supervised Hamkare poller is the single Telegram update receiver.
+    // Keeping a webhook here would make Telegram reject getUpdates with HTTP 409.
+    panel_telegram_call($token, 'deleteWebhook', [
         'drop_pending_updates' => 'false',
     ]);
 }
