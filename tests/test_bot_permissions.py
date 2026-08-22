@@ -152,6 +152,45 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(sent[-1][2][0][0]["url"], expected)
 
 
+    def test_allowed_group_members_receive_admin_panel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = BOT.Config(
+                platform="telegram",
+                token="1234567890:abcdefghijklmnopqrstuvwxyzABCDE",
+                log_chat_id="-1004315509328",
+                admin_ids=self.admins,
+                download_url="https://adlisho.online/download",
+                site_url="https://adlisho.online",
+                support_url="https://adlisho.online/contact.html",
+                privacy_url="https://adlisho.online/privacy.html",
+                tracking_url="https://adlisho.online/result.html",
+                brand_name="همکاره",
+                database_path=Path(directory) / "group.sqlite3",
+                apk_upload_enabled=True,
+                apk_deploy_path=Path(directory) / "app.apk",
+                max_apk_bytes=20 * 1024 * 1024,
+                apk_allowed_chat_ids=frozenset({"-1004315509328"}),
+            )
+            bot = BOT.Bot(config)
+            sent = []
+            bot.send = lambda chat_id, text, keyboard=None: sent.append((chat_id, text, keyboard))
+            bot.handle_message({
+                "chat": {"id": -1004315509328, "type": "supergroup"},
+                "from": {"id": 20002},
+                "text": "/admin",
+            })
+            self.assertIn("پنل مدیریت", sent[-1][1])
+            callbacks = {
+                button.get("callback_data")
+                for row in sent[-1][2]
+                for button in row
+            }
+            self.assertIn("admin_stats", callbacks)
+            self.assertIn("admin_upload", callbacks)
+            self.assertTrue(bot.is_operator("20002", -1004315509328))
+            self.assertFalse(bot.is_operator("20002", -1009999999999))
+
+
 class ValidationTests(unittest.TestCase):
     @staticmethod
     def config_for(directory, **overrides):
