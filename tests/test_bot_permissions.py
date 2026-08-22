@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -33,8 +34,7 @@ class PermissionTests(unittest.TestCase):
             path = Path(directory) / "opaque.apk"
             path.write_bytes(b"opaque-file-without-content-inspection" * 100)
             self.assertEqual(BOT.sha256_file(path), hashlib.sha256(path.read_bytes()).hexdigest())
-            self.assertFalse(hasattr(BOT, "verify_apk_archive"))
-            self.assertFalse(hasattr(BOT, "verify_apk_signature"))
+            self.assertTrue(hasattr(BOT, "validate_apk_file"))
 
     def test_admin_actions_are_denied_to_regular_users(self):
         for action in BOT.ADMIN_ACTIONS:
@@ -45,10 +45,19 @@ class PermissionTests(unittest.TestCase):
         for action in ("menu", "register", "download", "privacy", "help", "cancel"):
             self.assertTrue(BOT.can_access_action(action, "20002", self.admins))
 
-    def test_apk_upload_is_telegram_admin_only(self):
+    def test_apk_upload_is_telegram_admin_or_exact_allowed_group(self):
+        allowed = frozenset({"-1004315509328"})
         self.assertTrue(BOT.can_upload_apk("telegram", "10001", self.admins, True))
         self.assertFalse(BOT.can_upload_apk("telegram", "20002", self.admins, True))
-        self.assertTrue(BOT.can_upload_apk("bale", "10001", self.admins, True))
+        self.assertTrue(BOT.can_upload_apk(
+            "telegram", "20002", self.admins, True, "-1004315509328", allowed
+        ))
+        self.assertFalse(BOT.can_upload_apk(
+            "telegram", "20002", self.admins, True, "-1009999999999", allowed
+        ))
+        self.assertFalse(BOT.can_upload_apk(
+            "bale", "10001", self.admins, True, "-1004315509328", allowed
+        ))
         self.assertFalse(BOT.can_upload_apk("telegram", "10001", self.admins, False))
 
     def test_admin_id_parser_rejects_ambiguous_values(self):
@@ -221,7 +230,11 @@ class ValidationTests(unittest.TestCase):
 
     @staticmethod
     def apk_bytes(marker):
-        return marker * 2048
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("AndroidManifest.xml", b"manifest-" + marker)
+            archive.writestr("classes.dex", marker * 2048)
+        return output.getvalue()
 
     def test_authorized_upload_duplicate_and_rollback_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
