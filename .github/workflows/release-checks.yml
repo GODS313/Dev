@@ -26,6 +26,7 @@ jobs:
           bash -n \
             deploy-vps.sh \
             deploy-hamkare-bots.sh \
+            set-hamkare-telegram-log-chat.sh \
             install-hamkare-apk-panel.sh \
             install-hamkare-admin-vps.sh \
             enable-hamkare-telegram-direct-apk.sh \
