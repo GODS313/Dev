@@ -552,6 +552,15 @@ class Bot:
     def is_admin(self, user_id: str) -> bool:
         return user_id in self.config.admin_ids
 
+    def is_group_operator(self, chat_id: object) -> bool:
+        return (
+            self.config.platform == "telegram"
+            and str(chat_id) in self.config.apk_allowed_chat_ids
+        )
+
+    def is_operator(self, user_id: str, chat_id: object) -> bool:
+        return self.is_admin(user_id) or self.is_group_operator(chat_id)
+
     def is_registered(self, user_id: str) -> bool:
         return (
             self.connection.execute(
@@ -789,7 +798,7 @@ class Bot:
         )
 
     def show_admin_panel(self, chat_id: object, user_id: str) -> None:
-        if not self.is_admin(user_id):
+        if not self.is_operator(user_id, chat_id):
             self.audit(user_id, "denied_admin_panel")
             self.send(chat_id, "این بخش فقط برای مدیر مجاز است.", self.user_menu(user_id))
             return
@@ -800,7 +809,12 @@ class Bot:
         self.connection.commit()
         state = "متوقف" if self.paused() else "فعال"
         upload = "فعال" if can_upload_apk(
-            self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
+            self.config.platform,
+            user_id,
+            self.config.admin_ids,
+            self.config.apk_upload_enabled,
+            chat_id,
+            self.config.apk_allowed_chat_ids,
         ) else "غیرفعال"
         self.send(
             chat_id,
@@ -858,7 +872,7 @@ class Bot:
         if chat_id is None or not user_id:
             self.answer(callback_id)
             return
-        if not can_access_action(action, user_id, self.config.admin_ids):
+        if action in ADMIN_ACTIONS and not self.is_operator(user_id, chat_id):
             self.answer(callback_id, "دسترسی مدیر لازم است")
             self.audit(user_id, "denied_admin_action", action)
             self.send(chat_id, "این گزینه فقط برای مدیر مجاز است.", self.user_menu(user_id))
@@ -938,7 +952,12 @@ class Bot:
             )
         elif action == "admin_upload":
             if not can_upload_apk(
-                self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
+                self.config.platform,
+                user_id,
+                self.config.admin_ids,
+                self.config.apk_upload_enabled,
+                chat_id,
+                self.config.apk_allowed_chat_ids,
             ):
                 self.send(chat_id, "تعویض فایل APK در این بات فعال نیست.", self.admin_menu())
                 return
@@ -946,7 +965,7 @@ class Bot:
             self.send(
                 chat_id,
                 "فایل جدید را به‌صورت Document و با پسوند .apk ارسال کنید.\n"
-                "همان فایل بدون بازکردن، تغییر یا بررسی امضا منتشر می‌شود؛ فقط اندازه انتقال و SHA-256 برای تطبیق بایت‌ها ثبت می‌شود و از نسخه قبلی بکاپ گرفته می‌شود.",
+                "فایل بدون تغییر منتشر می‌شود؛ ساختار APK و در صورت نصب بودن apksigner امضا بررسی می‌شود، SHA-256 ثبت و از نسخه قبلی بکاپ گرفته می‌شود.",
                 [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
             )
         elif action == "admin_rollback":
@@ -1239,7 +1258,12 @@ class Bot:
 
     def prepare_apk_rollback(self, chat_id: object, user_id: str) -> None:
         if not can_upload_apk(
-            self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
+            self.config.platform,
+            user_id,
+            self.config.admin_ids,
+            self.config.apk_upload_enabled,
+            chat_id,
+            self.config.apk_allowed_chat_ids,
         ):
             self.send(chat_id, "بازگردانی APK در این بات فعال نیست.", self.admin_menu())
             return
@@ -1262,7 +1286,12 @@ class Bot:
 
     def rollback_apk(self, chat_id: object, user_id: str) -> None:
         if not can_upload_apk(
-            self.config.platform, user_id, self.config.admin_ids, self.config.apk_upload_enabled
+            self.config.platform,
+            user_id,
+            self.config.admin_ids,
+            self.config.apk_upload_enabled,
+            chat_id,
+            self.config.apk_allowed_chat_ids,
         ):
             self.send(chat_id, "بازگردانی APK در این بات فعال نیست.", self.admin_menu())
             return
@@ -1357,18 +1386,48 @@ class Bot:
         if chat_id is None:
             return
         user_id = str(message.get("from", {}).get("id", chat_id))
+        text = normalize(message.get("text", ""))
+        command = text.split(maxsplit=1)[0].split("@", 1)[0].lower() if text else ""
         if chat.get("type") != "private":
-            if (
-                self.config.platform == "telegram"
-                and str(chat_id) in self.config.apk_allowed_chat_ids
-                and message.get("document")
-            ):
+            if not self.is_group_operator(chat_id):
+                return
+            if message.get("document"):
                 self.handle_apk_upload(message, user_id, chat_id)
+                return
+            if command in {"/admin", "/start", "/menu"}:
+                self.clear_sessions(user_id)
+                self.show_admin_panel(chat_id, user_id)
+                return
+            if command == "/irancheck":
+                self.start_iran_check(chat_id, user_id)
+                return
+            if self.admin_state(user_id) == "awaiting_positions":
+                lines = [line.strip() for line in text.splitlines() if line.strip()]
+                positions = []
+                for line in lines:
+                    parts = [part.strip() for part in line.split("|", 1)]
+                    if len(parts) != 2 or not 2 <= len(parts[0]) <= 32 or not 2 <= len(parts[1]) <= 160:
+                        positions = []
+                        break
+                    positions.append({"title": parts[0], "description": parts[1]})
+                if len(positions) != 4:
+                    self.send(
+                        chat_id,
+                        "قالب معتبر نیست. دقیقاً چهار خط با «عنوان | توضیح کوتاه» بفرستید.",
+                        [[{"text": "❌ لغو", "callback_data": "admin_panel"}]],
+                    )
+                    return
+                self.set_setting("job_positions", json.dumps(positions, ensure_ascii=False))
+                self.connection.execute(
+                    "DELETE FROM admin_sessions WHERE platform=? AND user_id=?",
+                    (self.config.platform, user_id),
+                )
+                self.connection.commit()
+                self.audit(user_id, "group_job_positions_updated")
+                self.send(chat_id, "✅ چهار سمت جدید ذخیره شد.", self.admin_menu())
             return
         if self.handle_apk_upload(message, user_id, chat_id):
             return
-        text = normalize(message.get("text", ""))
-        command = text.split(maxsplit=1)[0].split("@", 1)[0].lower() if text else ""
         if command in {"/start", "/menu"}:
             self.clear_sessions(user_id)
             if self.config.platform == "bale":
