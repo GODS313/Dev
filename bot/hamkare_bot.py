@@ -1566,6 +1566,14 @@ class Bot:
                     offset = update_id + 1
             except KeyboardInterrupt:
                 return
+            except urllib.error.HTTPError as error:
+                print(f"polling HTTP error: {error.code}", file=sys.stderr, flush=True)
+                if error.code == 409:
+                    try:
+                        self.api("deleteWebhook", {"drop_pending_updates": False}, attempts=1)
+                    except Exception:
+                        pass
+                time.sleep(3)
             except Exception as error:
                 print(f"polling error: {type(error).__name__}", file=sys.stderr, flush=True)
                 time.sleep(3)
