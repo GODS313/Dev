@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 [[ $EUID -eq 0 ]] || { echo 'این دستور باید با sudo/root اجرا شود.' >&2; exit 1; }
-for command_name in flock python3 realpath stat systemctl; do
+for command_name in flock php python3 realpath stat systemctl; do
   command -v "$command_name" >/dev/null || { echo "دستور لازم نصب نیست: $command_name" >&2; exit 1; }
 done
 
@@ -13,9 +13,11 @@ flock -n 9 || { echo 'تنظیم دیگری هم‌زمان در حال اجرا
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_BOT="$SCRIPT_DIR/bot/hamkare_bot.py"
 SOURCE_BANNER="$SCRIPT_DIR/assets/hamkare-bot-banner.png"
+SOURCE_PANEL_LIB="$SCRIPT_DIR/hamkare-admin/panel-lib.php"
 APP_DIR="${HAMKARE_APP_DIR:-/opt/hamkare-bots}"
 TELEGRAM_ENV="$APP_DIR/telegram.env"
 BOT_TARGET="$APP_DIR/bot.py"
+PANEL_LIB_TARGET=/usr/local/lib/hamkare-apk-panel/panel-lib.php
 APK_ROOT=/var/www/adlisho
 APK_TARGET=$APK_ROOT/app.apk
 APK_STAGE=$APK_ROOT/.hamkare-apk-staging
@@ -31,7 +33,7 @@ LEGACY_WAS_ENABLED=0
 
 [[ "$ALLOWED_CHAT_IDS" =~ ^-100[0-9]{7,26}(,-100[0-9]{7,26})*$ ]] || { echo 'Chat ID گروه تلگرام معتبر نیست.' >&2; exit 1; }
 
-for source in "$SOURCE_BOT" "$SOURCE_BANNER" "$TELEGRAM_ENV" "$BOT_TARGET"; do
+for source in "$SOURCE_BOT" "$SOURCE_BANNER" "$SOURCE_PANEL_LIB" "$TELEGRAM_ENV" "$BOT_TARGET"; do
   [[ -f "$source" && ! -L "$source" ]] || { echo "فایل معتبر پیدا نشد: $source" >&2; exit 1; }
 done
 [[ -d "$APK_ROOT" && ! -L "$APK_ROOT" && "$(realpath -e -- "$APK_ROOT")" == "$APK_ROOT" ]] || {
@@ -44,6 +46,9 @@ done
 cp -a "$TELEGRAM_ENV" "$BOT_TARGET" "$BACKUP_DIR/"
 [[ ! -f "$OVERRIDE_FILE" ]] || cp -a "$OVERRIDE_FILE" "$BACKUP_DIR/apk-direct.conf"
 [[ ! -f "$BANNER_TARGET" ]] || cp -a "$BANNER_TARGET" "$BACKUP_DIR/hamkare-bot-banner.png"
+[[ ! -f "$PANEL_LIB_TARGET" ]] || cp -a "$PANEL_LIB_TARGET" "$BACKUP_DIR/panel-lib.php"
+PANEL_LIB_EXISTED=0
+[[ ! -f "$PANEL_LIB_TARGET" ]] || PANEL_LIB_EXISTED=1
 BANNER_EXISTED=0
 [[ ! -f "$BANNER_TARGET" ]] || BANNER_EXISTED=1
 OVERRIDE_EXISTED=0
@@ -54,6 +59,9 @@ rollback() {
   if [[ $INSTALL_COMPLETE -eq 0 ]]; then
     cp -a "$BACKUP_DIR/telegram.env" "$TELEGRAM_ENV" 2>/dev/null || true
     cp -a "$BACKUP_DIR/bot.py" "$BOT_TARGET" 2>/dev/null || true
+    if [[ $PANEL_LIB_EXISTED -eq 1 ]]; then
+      cp -a "$BACKUP_DIR/panel-lib.php" "$PANEL_LIB_TARGET" 2>/dev/null || true
+    fi
     if [[ $BANNER_EXISTED -eq 1 ]]; then
       cp -a "$BACKUP_DIR/hamkare-bot-banner.png" "$BANNER_TARGET" 2>/dev/null || true
     else
@@ -94,6 +102,13 @@ BOT_GID="$(stat -c %g -- "$BOT_TARGET")"
 BOT_MODE="$(stat -c %a -- "$BOT_TARGET")"
 install -o "$BOT_UID" -g "$BOT_GID" -m "$BOT_MODE" "$SOURCE_BOT" "$BOT_TARGET"
 install -o root -g root -m 0644 "$SOURCE_BANNER" "$BANNER_TARGET"
+if [[ $PANEL_LIB_EXISTED -eq 1 ]]; then
+  PANEL_UID="$(stat -c %u -- "$PANEL_LIB_TARGET")"
+  PANEL_GID="$(stat -c %g -- "$PANEL_LIB_TARGET")"
+  PANEL_MODE="$(stat -c %a -- "$PANEL_LIB_TARGET")"
+  install -o "$PANEL_UID" -g "$PANEL_GID" -m "$PANEL_MODE" "$SOURCE_PANEL_LIB" "$PANEL_LIB_TARGET"
+  php -l "$PANEL_LIB_TARGET"
+fi
 install -d -o root -g root -m 0755 "$OVERRIDE_DIR"
 cat >"$OVERRIDE_FILE" <<EOF
 [Service]
@@ -152,6 +167,33 @@ PY
 
 python3 -m py_compile "$BOT_TARGET"
 systemctl daemon-reload
+systemctl stop hamkare-telegram.service
+
+BOT_TOKEN="$(sed -n 's/^BOT_TOKEN=//p' "$TELEGRAM_ENV" | tail -n 1)"
+python3 - "$BOT_TOKEN" <<'PY'
+import json
+import sys
+import urllib.request
+
+token = sys.argv[1]
+for method, payload in (
+    ("deleteWebhook", {"drop_pending_updates": False}),
+    ("getWebhookInfo", {}),
+):
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        result = json.load(response)
+    if not result.get("ok"):
+        raise RuntimeError(f"Telegram rejected {method}")
+    if method == "getWebhookInfo" and result.get("result", {}).get("url"):
+        raise RuntimeError("Telegram webhook is still active")
+PY
+unset BOT_TOKEN
+
 systemctl restart hamkare-telegram.service
 sleep 4
 systemctl is-active --quiet hamkare-telegram.service
