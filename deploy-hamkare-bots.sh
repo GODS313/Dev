@@ -220,6 +220,7 @@ TRACKING_URL="${TRACKING_URL:-https://adlisho.online/result.html}"
 TELEGRAM_BOT_USERNAME="${TELEGRAM_BOT_USERNAME:-Pasokh313e_bot}"
 BALE_BOT_USERNAME="${BALE_BOT_USERNAME:-Hamkarebot}"
 MAX_APK_BYTES="${MAX_APK_BYTES:-20971520}"
+TG_LOG="${TG_LOG:--1004315509328}"
 
 prompt_secret() {
   local variable_name="$1" prompt="$2" value="${!1:-}"
