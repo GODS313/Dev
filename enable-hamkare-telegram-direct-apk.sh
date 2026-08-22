@@ -25,6 +25,9 @@ ALLOWED_CHAT_IDS="${APK_ALLOWED_CHAT_IDS:--1004315509328}"
 OVERRIDE_DIR=/etc/systemd/system/hamkare-telegram.service.d
 OVERRIDE_FILE=$OVERRIDE_DIR/apk-direct.conf
 BACKUP_DIR="$(mktemp -d /var/backups/hamkare-telegram-direct-apk-XXXXXXXX)"
+LEGACY_RECEIVER=seskia-hamkare-poller.service
+LEGACY_WAS_ACTIVE=0
+LEGACY_WAS_ENABLED=0
 
 [[ "$ALLOWED_CHAT_IDS" =~ ^-100[0-9]{7,26}(,-100[0-9]{7,26})*$ ]] || { echo 'Chat ID گروه تلگرام معتبر نیست.' >&2; exit 1; }
 
@@ -63,11 +66,23 @@ rollback() {
     fi
     systemctl daemon-reload 2>/dev/null || true
     systemctl try-restart hamkare-telegram.service 2>/dev/null || true
+    if [[ $LEGACY_WAS_ENABLED -eq 1 ]]; then
+      systemctl enable "$LEGACY_RECEIVER" 2>/dev/null || true
+    fi
+    if [[ $LEGACY_WAS_ACTIVE -eq 1 ]]; then
+      systemctl start "$LEGACY_RECEIVER" 2>/dev/null || true
+    fi
     echo "تنظیم ناموفق بود؛ نسخه قبلی بازگردانده شد. بکاپ: $BACKUP_DIR" >&2
   fi
   return "$status"
 }
 trap rollback EXIT
+
+if systemctl cat "$LEGACY_RECEIVER" >/dev/null 2>&1; then
+  systemctl is-active --quiet "$LEGACY_RECEIVER" && LEGACY_WAS_ACTIVE=1
+  systemctl is-enabled --quiet "$LEGACY_RECEIVER" && LEGACY_WAS_ENABLED=1
+  systemctl disable --now "$LEGACY_RECEIVER"
+fi
 
 install -d -o www-data -g www-data -m 0700 "$APK_STAGE"
 [[ ! -L "$APK_STAGE/publish.lock" ]] || { echo 'قفل انتشار APK معتبر نیست.' >&2; exit 1; }
@@ -170,8 +185,10 @@ PY
 unset BOT_TOKEN
 
 INSTALL_COMPLETE=1
-echo "✅ دریافت APK از گروه $ALLOWED_CHAT_IDS برای همه اعضای همان گروه فعال شد."
+echo '✅ دریافت APK برای همه اعضای گروه مجاز فعال شد.'
+echo '✅ پنل /admin و تمام دکمه‌های مدیریتی داخل همین گروه برای اعضای گروه فعال شد.'
+[[ $LEGACY_WAS_ACTIVE -eq 0 && $LEGACY_WAS_ENABLED -eq 0 ]] || echo "✅ گیرنده قدیمی متداخل غیرفعال شد: $LEGACY_RECEIVER"
 echo '✅ تنظیمات و سرویس بله تغییر نکرد.'
 echo "✅ لینک ثابت سایت، تلگرام و بله: $PUBLIC_URL"
 echo "✅ بکاپ قابل بازگشت: $BACKUP_DIR"
-echo "تست نهایی: یک APK را داخل گروه $ALLOWED_CHAT_IDS به‌صورت Document ارسال یا فوروارد کنید."
+echo 'تست نهایی: یک APK را داخل گروه مجاز به‌صورت Document ارسال یا فوروارد کنید.'
