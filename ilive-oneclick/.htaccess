@@ -1,0 +1,5 @@
+Options -Indexes
+AddDefaultCharset UTF-8
+<FilesMatch "^(config\.php|admin\.pass|settings\.json)$">
+Require all denied
+</FilesMatch>
