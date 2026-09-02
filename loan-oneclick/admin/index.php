@@ -1,0 +1,18 @@
+<?php
+require dirname(__DIR__).'/config.php';
+$error='';$success='';$first=!is_file(PASS_FILE);
+if(isset($_GET['logout'])){session_destroy();header('Location: ./');exit;}
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['setup'])){
+ if(!csrf_ok())$error='درخواست نامعتبر است.'; elseif(!$first)$error='مدیریت قبلاً راه‌اندازی شده است.'; elseif(strlen((string)($_POST['password']??''))<10)$error='رمز باید حداقل ۱۰ کاراکتر باشد.'; else{file_put_contents(PASS_FILE,password_hash((string)$_POST['password'],PASSWORD_DEFAULT),LOCK_EX);$_SESSION['admin']=true;header('Location: ./');exit;}
+}
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['login'])){
+ $hash=@file_get_contents(PASS_FILE); if(!csrf_ok())$error='درخواست نامعتبر است.'; elseif($hash&&password_verify((string)($_POST['password']??''),$hash)){session_regenerate_id(true);$_SESSION['admin']=true;header('Location: ./');exit;}else $error='رمز عبور نادرست است.';
+}
+$logged=!empty($_SESSION['admin']);
+if($logged&&$_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['save'])){
+ if(!csrf_ok())$error='درخواست نامعتبر است.';else{$decoded=json_decode((string)($_POST['content']??''),true);if(!is_array($decoded))$error='ساختار JSON نامعتبر است.';elseif(save_content($decoded))$success='تغییرات ذخیره شد.';else $error='فایل data/content.json قابل نوشتن نیست.';}
+}
+$content=json_encode(load_content(),JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مدیریت وام‌یار</title><style>body{margin:0;background:#07111f;color:#edf7ff;font-family:Tahoma,sans-serif}.wrap{max-width:980px;margin:60px auto;padding:20px}.box{background:#102036;border:1px solid #25405c;border-radius:18px;padding:26px}a{color:#39d8b1}input,textarea{width:100%;box-sizing:border-box;background:#091625;border:1px solid #2b4968;color:#fff;border-radius:10px;padding:13px;margin:10px 0;font:inherit}textarea{min-height:540px;direction:ltr;text-align:left;font-family:monospace;line-height:1.6}button{background:#22d3a7;color:#062019;border:0;border-radius:10px;padding:12px 20px;font-weight:bold;cursor:pointer}.msg{padding:11px;border-radius:8px;margin:12px 0}.err{background:#5b2631}.ok{background:#175141}.head{display:flex;justify-content:space-between;align-items:center}small{color:#a9bbcc;line-height:1.9;display:block}</style></head><body><div class="wrap"><div class="box"><div class="head"><h1>مدیریت وام‌یار</h1><a href="../">مشاهده سایت</a></div><?php if($error):?><div class="msg err"><?=e($error)?></div><?php endif;?><?php if($success):?><div class="msg ok"><?=e($success)?></div><?php endif;?>
+<?php if(!$logged):?><h2><?=$first?'راه‌اندازی اولیه':'ورود'?></h2><small><?=$first?'یک رمز قوی حداقل ۱۰ کاراکتری برای مدیریت بسازید.':'رمز مدیریت را وارد کنید.'?></small><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="password" name="password" required minlength="10" autocomplete="current-password"><button name="<?=$first?'setup':'login'?>" value="1"><?=$first?'ساخت حساب مدیریت':'ورود'?></button></form>
+<?php else:?><div class="head"><p>محتوای سایت، وام‌ها و پرسش‌ها را ویرایش کنید.</p><a href="?logout=1">خروج</a></div><small>مبالغ به تومان هستند. برای افزودن وام، یکی از آیتم‌های loans را کپی کنید و id یکتا بدهید. نشانی منبع رسمی را در url قرار دهید.</small><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><textarea name="content" spellcheck="false"><?=e($content)?></textarea><button name="save" value="1">ذخیره تغییرات</button></form><?php endif;?></div></div></body></html>
