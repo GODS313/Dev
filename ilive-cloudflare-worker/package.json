@@ -1,0 +1,24 @@
+{
+  "name": "ilive-telegram-relay",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "TG_BOT_TOKEN": {
+        "description": "Telegram BotFather token. Keep this value secret."
+      },
+      "TG_CHAT_ID": {
+        "description": "Telegram destination chat or group ID, for example -1001234567890."
+      },
+      "RELAY_SECRET": {
+        "description": "A long random shared secret. Enter the exact same value in the iLive admin panel."
+      }
+    }
+  }
+}
