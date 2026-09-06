@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787349758712,
+      "tag": "0000_tired_toxin",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787350044565,
+      "tag": "0001_closed_the_renegades",
+      "breakpoints": true
+    }
+  ]
+}
