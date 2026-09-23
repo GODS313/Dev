@@ -282,6 +282,28 @@ final class App
             Audit::log($actor, 'task_settings', $mm[1], $req->ip);
             return Response::redirect('/admin/tasks', 'تنظیمات وظیفه ذخیره شد');
         }
+        if ($p === '/tasks/build_apk/upload' && $post) {
+            if (!\App\Tasks\Runner::enabled('build_apk')) {
+                return Response::redirect('/admin/tasks', 'این وظیفه غیرفعال است؛ اول فعالش کنید');
+            }
+            $bytes = $req->fileBytes('apk');
+            if ($bytes === null || strlen($bytes) < 1000 || substr($bytes, 0, 2) !== 'PK') {
+                return Response::redirect('/admin/tasks', 'فایل معتبری آپلود نشد (باید APK باشد)');
+            }
+            $sha = hash('sha256', $bytes);
+            if (\App\Tasks\BuildApkTask::alreadyPublished($sha)) {
+                return Response::redirect('/admin/tasks', 'همین فایل قبلاً منتشر شده است');
+            }
+            $task = \App\Tasks\Registry::get('build_apk');
+            $run = \App\Tasks\Runner::createRun('build_apk', 'upload:' . $sha);
+            if (!$task->stageUpload($run, $bytes)) {
+                return Response::redirect('/admin/tasks', 'ذخیره فایل ممکن نشد (فضای دیسک؟)');
+            }
+            Database::run("UPDATE task_runs SET status = 'publishing', ref = ? WHERE id = ?", [$sha, $run['id']]);
+            $run = \App\Tasks\Runner::advance(\App\Tasks\Runner::run((int) $run['id']));
+            Audit::log($actor, 'task_upload', 'build_apk #' . $run['id'] . ' ' . $run['status'], $req->ip);
+            return Response::redirect('/admin/tasks', 'فایل آپلود و منتشر شد — وضعیت: ' . $run['status']);
+        }
         if (preg_match('#^/tasks/([a-z_]+)/run$#', $p, $mm) && $post) {
             if (!\App\Tasks\Runner::enabled($mm[1])) {
                 return Response::redirect('/admin/tasks', 'این وظیفه غیرفعال است؛ اول فعالش کنید');

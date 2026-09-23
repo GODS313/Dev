@@ -16,7 +16,28 @@ final class Request
         public string $ip = '0.0.0.0',
         public bool $secure = false,
         public string $host = 'localhost',
+        public array $files = [],
     ) {
+    }
+
+    /**
+     * Returns the raw bytes of an uploaded file field, or null. Supports the real
+     * $_FILES shape (tmp_name) and a test shape ('bytes').
+     */
+    public function fileBytes(string $field): ?string
+    {
+        $f = $this->files[$field] ?? null;
+        if (!is_array($f)) {
+            return null;
+        }
+        if (isset($f['bytes'])) {
+            return (string) $f['bytes'];
+        }
+        if (($f['error'] ?? 1) === 0 && !empty($f['tmp_name']) && is_uploaded_file($f['tmp_name'])) {
+            $bytes = @file_get_contents($f['tmp_name']);
+            return $bytes === false ? null : $bytes;
+        }
+        return null;
     }
 
     public static function fromGlobals(): self
@@ -44,6 +65,7 @@ final class Request
             (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'),
             $secure,
             (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'),
+            $_FILES,
         );
     }
 

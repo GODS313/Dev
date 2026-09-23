@@ -26,9 +26,20 @@
       <button>ذخیره تنظیمات</button>
     </div>
   </form>
+  <?php if ($key === 'build_apk'): ?>
+  <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+    <h3>آپلود مستقیم فایل APK</h3>
+    <p class="muted">اگر سرویس Build فایل را فقط به‌صورت فایل می‌دهد (نه لینک)، همان فایل را اینجا آپلود کنید تا خودکار روی سایت دانلود منتشر شود.</p>
+    <form method="post" action="/admin/tasks/build_apk/upload" enctype="multipart/form-data" class="inline">
+      <input type="hidden" name="_csrf" value="<?= $e($csrf) ?>">
+      <input type="file" name="apk" accept=".apk,application/vnd.android.package-archive" required>
+      <button<?= $st['enabled'] ? '' : ' disabled' ?>>آپلود و انتشار</button>
+    </form>
+  </div>
+  <?php endif; ?>
   <form method="post" action="/admin/tasks/<?= $e($key) ?>/run" class="inline" style="margin-top:10px">
     <input type="hidden" name="_csrf" value="<?= $e($csrf) ?>">
-    <button<?= $st['enabled'] ? '' : ' disabled' ?>>اجرای دستی الان</button>
+    <button<?= $st['enabled'] ? '' : ' disabled' ?>>اجرا از روی آدرس اینترنتی</button>
     <?php if (!$st['enabled']): ?><span class="muted">برای اجرا اول فعالش کنید</span><?php endif; ?>
   </form>
 

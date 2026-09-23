@@ -84,6 +84,21 @@ final class BuildApkTask implements Task
         return $dir . '/run-' . $run['id'] . '.apk';
     }
 
+    /** Stages an operator-uploaded APK for a run so publishing can pick it up. */
+    public function stageUpload(array $run, string $bytes): bool
+    {
+        return @file_put_contents($this->tmpPath($run), $bytes, LOCK_EX) !== false;
+    }
+
+    /** True if this exact file was already published successfully. */
+    public static function alreadyPublished(string $sha): bool
+    {
+        return \App\Core\Database::scalar(
+            "SELECT 1 FROM task_runs WHERE task_key = 'build_apk' AND status = 'done' AND ref = ? LIMIT 1",
+            [$sha]
+        ) ? true : false;
+    }
+
     private function fetch(array $s, array $run): array
     {
         $url = trim((string) ($s['source_url'] ?? ''));

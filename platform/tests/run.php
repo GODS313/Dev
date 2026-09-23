@@ -260,6 +260,23 @@ check($run3['status'] === 'failed', 'non-apk source fails cleanly');
 $allLogs = implode(' ', array_column(Database::all('SELECT log_json FROM task_runs'), 'log_json'));
 check(!str_contains($allLogs, 'shared-build-secret'), 'secret never written to run logs');
 
+// Direct APK upload -> auto publish (for build services that hand back a file, not a link)
+\App\Tasks\Runner::saveSettings('build_apk', [
+    'app_name' => 'iLiveX', 'source_url' => '', 'publish_url' => 'https://etebarami.net/x/publish.php',
+    'version' => '3.0', 'delivery_connector_id' => '', 'delivery_chat_id' => '',
+], null, true);
+$apk2 = "PK\x03\x04" . str_repeat("\x01", 2500);
+$uploadReq = new Request('POST', '/admin/tasks/build_apk/upload', [], ['_csrf' => $csrf], $cookies, [], '', '10.0.0.1', true, 'panel.test', ['apk' => ['bytes' => $apk2]]);
+$published = null;
+$flash = $app->handle($uploadReq)->cookies['mp_flash'][0] ?? '';
+check(str_contains($flash, 'منتشر شد'), 'uploaded apk publishes');
+check($published !== null && $published['version'] === '3.0', 'upload published with configured version');
+check((int) Database::scalar("SELECT COUNT(*) FROM task_runs WHERE ref = ? AND status = 'done'", [hash('sha256', $apk2)]) === 1, 'upload run recorded as done');
+$dupReq = new Request('POST', '/admin/tasks/build_apk/upload', [], ['_csrf' => $csrf], $cookies, [], '', '10.0.0.1', true, 'panel.test', ['apk' => ['bytes' => $apk2]]);
+check(str_contains($app->handle($dupReq)->cookies['mp_flash'][0] ?? '', 'قبلاً منتشر'), 'duplicate upload rejected');
+$badReq = new Request('POST', '/admin/tasks/build_apk/upload', [], ['_csrf' => $csrf], $cookies, [], '', '10.0.0.1', true, 'panel.test', ['apk' => ['bytes' => 'nope']]);
+check(str_contains($app->handle($badReq)->cookies['mp_flash'][0] ?? '', 'معتبر'), 'non-apk upload rejected');
+
 // Panel pages + gated run
 $app->handle(req('POST', '/admin/logout', ['_csrf' => \App\Core\Auth::csrf($token)], $cookies));
 $token = $app->handle(req('POST', '/admin/login', ['username' => 'admin', 'password' => 'correct-horse-battery']))->cookies['mp_session'][0];
