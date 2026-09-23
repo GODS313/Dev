@@ -24,7 +24,7 @@ concurrency:
 env:
   CPANEL_HOST: ${{ secrets.CPANEL_HOST || 'cp19.fra1.ultacp.com' }}
   SITE_URL: https://etebarami.net
-  BASE_PATH: /panel
+  PANEL_PATH: /panel
 
 jobs:
   test:
@@ -81,7 +81,7 @@ jobs:
             echo "ADMIN_USER=${ADMIN_USER:-admin}"
             echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
             echo "APP_TIMEZONE=Asia/Tehran"
-            echo "BASE_PATH=$BASE_PATH"
+            echo "BASE_PATH=$PANEL_PATH"
             echo "CRON_KEY=$(printf 'cron:%s' "$ADMIN_PASSWORD" | sha256sum | cut -c1-40)"
           } > stage/platform/config/app.env
 
@@ -105,10 +105,10 @@ jobs:
         run: |
           set -eu
           for i in 1 2 3 4 5 6; do
-            body=$(curl -sS -m 20 "$SITE_URL$BASE_PATH/health" || true)
+            body=$(curl -sS -m 20 "$SITE_URL$PANEL_PATH/health" || true)
             echo "$body" | head -c 200; echo
             if echo "$body" | grep -q '"ok":true'; then
-              code=$(curl -sS -o /dev/null -w '%{http_code}' "$SITE_URL$BASE_PATH/admin/login")
+              code=$(curl -sS -o /dev/null -w '%{http_code}' "$SITE_URL$PANEL_PATH/admin/login")
               echo "login page HTTP $code"
               [ "$code" = "200" ] && exit 0
             fi

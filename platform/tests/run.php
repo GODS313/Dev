@@ -7,6 +7,9 @@ mkdir($tmp);
 putenv('STORAGE_DIR=' . $tmp);
 putenv('ADMIN_USER=admin');
 putenv('ADMIN_PASSWORD=correct-horse-battery');
+putenv('BASE_PATH=');
+putenv('CRON_KEY=');
+putenv('DB_DSN=');
 
 require dirname(__DIR__) . '/app/bootstrap.php';
 
