@@ -27,6 +27,14 @@ final class App
             return $this->route($req);
         } catch (\Throwable $e) {
             error_log('[platform] ' . $e);
+            $key = $req->input('key');
+            if ($key !== '' && hash_equals(Worker::cronKey(), $key)) {
+                // Deploy pipeline diagnostics; the key is only known to the pipeline.
+                return Response::json(['ok' => false, 'detail' => get_class($e) . ': ' . $e->getMessage()
+                    . ' @ ' . basename($e->getFile()) . ':' . $e->getLine() . ' | php ' . PHP_VERSION
+                    . ' | pdo_sqlite ' . (extension_loaded('pdo_sqlite') ? 'yes' : 'no')
+                    . ' | storage writable ' . (is_writable(Config::storagePath()) ? 'yes' : 'no')], 500);
+            }
             return str_starts_with($req->path, '/api/') || str_starts_with($req->path, '/hook/')
                 ? Response::json(['ok' => false, 'error' => 'server error'], 500)
                 : Response::html(View::render('error', ['message' => 'خطای داخلی سرور. جزئیات در لاگ سرور ثبت شد.']), 500);
