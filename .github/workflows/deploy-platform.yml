@@ -114,5 +114,10 @@ jobs:
             fi
             sleep 10
           done
+          key=$(printf 'cron:%s' "$ADMIN_PASSWORD" | sha256sum | cut -c1-40)
+          echo "::add-mask::$key"
+          echo "--- diagnostics ---"
+          curl -sS -m 20 "$SITE_URL$PANEL_PATH/health?key=$key" | head -c 600; echo
+          lftp -u "$CPANEL_USER,$CPANEL_PASSWORD" "$CPANEL_HOST" -e "set ftp:ssl-force true; cat public_html/panel/error_log; bye" 2>/dev/null | tail -n 15 || true
           echo "::error::health check failed"
           exit 1

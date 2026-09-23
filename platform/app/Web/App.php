@@ -42,7 +42,15 @@ final class App
             return Response::redirect('/admin');
         }
         if ($p === '/health') {
-            Database::scalar('SELECT 1');
+            try {
+                Database::scalar('SELECT 1');
+            } catch (\Throwable $e) {
+                // Details only for callers holding the worker key (the deploy pipeline).
+                $detail = hash_equals(Worker::cronKey(), $req->input('key'))
+                    ? get_class($e) . ': ' . $e->getMessage() . ' | php ' . PHP_VERSION . ' | sqlite ' . (extension_loaded('pdo_sqlite') ? 'yes' : 'no')
+                    : null;
+                return Response::json(['ok' => false, 'db' => 'error', 'detail' => $detail], 500);
+            }
             $last = @file_get_contents(Config::storagePath('worker.last')) ?: null;
             return Response::json(['ok' => true, 'db' => 'ok', 'worker_last_run' => $last, 'time' => gmdate('c')]);
         }
