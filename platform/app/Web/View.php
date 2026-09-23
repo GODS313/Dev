@@ -22,9 +22,11 @@ final class View
             return (string) ob_get_clean();
         };
         $content = $render(APP_ROOT . '/app/Views/' . $name . '.php', $data);
-        if (in_array($name, ['login', 'error'], true)) {
-            return $render(APP_ROOT . '/app/Views/bare.php', $data + ['content' => $content]);
-        }
-        return $render(APP_ROOT . '/app/Views/layout.php', $data + ['content' => $content, 'view' => $name]);
+        $html = in_array($name, ['login', 'error'], true)
+            ? $render(APP_ROOT . '/app/Views/bare.php', $data + ['content' => $content])
+            : $render(APP_ROOT . '/app/Views/layout.php', $data + ['content' => $content, 'view' => $name]);
+        $base = \App\Core\Config::basePath();
+        // Views use root-relative URLs; mount them under the sub-directory when there is one.
+        return $base === '' ? $html : preg_replace('#\b(href|src|action)="/(?!/)#', '$1="' . $base . '/', $html);
     }
 }

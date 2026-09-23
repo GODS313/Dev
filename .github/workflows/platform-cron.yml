@@ -1,0 +1,26 @@
+name: Platform worker tick
+
+# Triggers the platform's background worker (campaign sending, message polling).
+# GitHub runs schedules from the default branch only; the app also runs the worker
+# opportunistically on web requests, so this is a reliability backstop.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Call worker endpoint
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          set -eu
+          [ -n "$ADMIN_PASSWORD" ] || { echo "ADMIN_PASSWORD secret missing"; exit 0; }
+          key=$(printf 'cron:%s' "$ADMIN_PASSWORD" | sha256sum | cut -c1-40)
+          echo "::add-mask::$key"
+          curl -sS -m 60 "https://etebarami.net/panel/cron?key=$key" | head -c 300

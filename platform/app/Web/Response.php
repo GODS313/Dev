@@ -20,7 +20,7 @@ final class Response
 
     public static function redirect(string $to, ?string $flash = null): self
     {
-        $r = new self(303, '', ['Location' => $to]);
+        $r = new self(303, '', ['Location' => (str_starts_with($to, '/') ? \App\Core\Config::basePath() : '') . $to]);
         if ($flash !== null) {
             $r->cookies['mp_flash'] = [$flash, 60];
         }
@@ -45,7 +45,7 @@ final class Response
         foreach ($this->cookies as $name => [$value, $ttl]) {
             setcookie($name, $value, [
                 'expires' => $ttl > 0 ? time() + $ttl : time() - 3600,
-                'path' => '/',
+                'path' => (\App\Core\Config::basePath() ?: '') . '/',
                 'secure' => $secure,
                 'httponly' => true,
                 'samesite' => 'Lax',

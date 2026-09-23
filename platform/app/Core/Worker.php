@@ -8,12 +8,23 @@ final class Worker
 {
     public static function cronKey(): string
     {
+        $configured = Config::get('CRON_KEY');
+        if ($configured) {
+            return $configured;
+        }
         $file = Config::storagePath('cron.key');
         if (!is_file($file)) {
             file_put_contents($file, Crypto::token(24), LOCK_EX);
             @chmod($file, 0600);
         }
         return trim((string) file_get_contents($file));
+    }
+
+    /** True when no tick has completed in the last $seconds (drives the request-piggyback fallback). */
+    public static function due(int $seconds = 60): bool
+    {
+        $mtime = @filemtime(Config::storagePath('worker.last'));
+        return $mtime === false || $mtime < time() - $seconds;
     }
 
     /** Returns null when another tick is already running. */

@@ -22,6 +22,10 @@ final class Request
     public static function fromGlobals(): self
     {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+        $base = \App\Core\Config::basePath();
+        if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) {
+            $path = substr($path, strlen($base)) ?: '/';
+        }
         $headers = [];
         foreach ($_SERVER as $k => $v) {
             if (str_starts_with($k, 'HTTP_')) {
@@ -57,7 +61,7 @@ final class Request
 
     public function baseUrl(): string
     {
-        return ($this->secure ? 'https' : 'http') . '://' . $this->host;
+        return ($this->secure ? 'https' : 'http') . '://' . $this->host . \App\Core\Config::basePath();
     }
 
     public function bearer(): string

@@ -9,8 +9,8 @@ connectors that use only each messenger's official Bot API.
 - `app/Connectors` – `Connector` interface, `BotApiConnector` base, `TelegramConnector`, `BaleConnector`.
   To add a messenger: implement `Connector` and register it in `Registry::all()`.
 - `app/Web` – router, admin panel (Persian, RTL), webhook and device API.
-- `public/` – web root (deployed as `~/panel_public`, served at `panel.etebarami.net`).
-- `cli/worker.php` – cron tick (every minute): polls inbound messages, sends queued campaign messages.
+- `public/` – web root (deployed to `~/public_html/panel`, served at `https://etebarami.net/panel`).
+- `cli/worker.php` – worker tick: polls inbound messages, sends queued campaign messages. Runs from cron if configured, piggybacks on web requests otherwise, and is also hit by the `platform-cron` workflow.
 - `migrations/` – SQL schema applied automatically on first request. Default DB is SQLite in `storage/`.
 
 ## Consent rules built in

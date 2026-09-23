@@ -38,6 +38,13 @@ final class Config
         self::$values[$key] = $value;
     }
 
+    /** URL prefix when the app is served from a sub-directory, e.g. "/panel". */
+    public static function basePath(): string
+    {
+        $base = '/' . trim((string) self::get('BASE_PATH', ''), '/');
+        return $base === '/' ? '' : $base;
+    }
+
     public static function storagePath(string $name = ''): string
     {
         $dir = self::get('STORAGE_DIR', APP_ROOT . '/storage');
