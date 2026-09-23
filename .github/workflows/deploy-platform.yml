@@ -87,20 +87,24 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         run: |
           set -eu
-          out=$(curl -sS --fail-with-body -u "$CPANEL_USER:$CPANEL_PASSWORD" \
-            "https://$CPANEL_HOST:2083/execute/SubDomain/addsubdomain?domain=$SUBDOMAIN&rootdomain=$ROOT_DOMAIN&dir=panel_public" || true)
-          echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("status", d.get("status"), (d.get("errors") or [""])[0])' || echo "$out" | head -c 300
+          out=$(platform/deploy/cpanel.sh uapi "SubDomain/addsubdomain?domain=$SUBDOMAIN&rootdomain=$ROOT_DOMAIN&dir=panel_public")
+          echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("status", d.get("status"), d.get("errors"))'
+          platform/deploy/cpanel.sh uapi "SubDomain/listsubdomains" | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)
+          names=[x.get("domain") for x in (d.get("data") or [])]
+          print("subdomains:", names)
+          sys.exit(0 if any(n and n.startswith("panel.") for n in names) else 1)'
 
       - name: Select PHP 8 for the subdomain
         if: steps.secrets.outputs.ready == 'true'
         continue-on-error: true
         run: |
           set -eu
-          ver=$(curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/execute/LangPHP/php_get_installed_versions" \
+          ver=$(platform/deploy/cpanel.sh uapi "LangPHP/php_get_installed_versions" \
             | python3 -c 'import json,sys; v=[x for x in json.load(sys.stdin)["data"]["versions"] if x.startswith("ea-php8")]; print(sorted(v)[-1] if v else "")')
           echo "selected: ${ver:-none}"
-          [ -n "$ver" ] && curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" \
-            "https://$CPANEL_HOST:2083/execute/LangPHP/php_set_vhost_versions?version=$ver&vhost=$SUBDOMAIN.$ROOT_DOMAIN" | head -c 300
+          [ -n "$ver" ] && platform/deploy/cpanel.sh uapi "LangPHP/php_set_vhost_versions?version=$ver&vhost=$SUBDOMAIN.$ROOT_DOMAIN" | head -c 300
 
       - name: Upload over FTPS
         if: steps.secrets.outputs.ready == 'true'
@@ -122,18 +126,17 @@ jobs:
         continue-on-error: true
         run: |
           set -eu
-          api2() { curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/json-api/cpanel?cpanel_jsonapi_user=$CPANEL_USER&cpanel_jsonapi_apiversion=2&$1"; }
-          if api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=listcron" | grep -q 'platform/cli/worker.php'; then
+          if platform/deploy/cpanel.sh api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=listcron" | grep -q 'platform/cli/worker.php'; then
             echo "cron already present"
           else
             cmd=$(python3 -c 'import urllib.parse,os; print(urllib.parse.quote("/usr/local/bin/php /home/%s/platform/cli/worker.php >/dev/null 2>&1" % os.environ["CPANEL_USER"]))')
-            api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=add_line&minute=*&hour=*&day=*&month=*&weekday=*&command=$cmd" | head -c 300; echo
+            platform/deploy/cpanel.sh api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=add_line&minute=*&hour=*&day=*&month=*&weekday=*&command=$cmd" | head -c 300; echo
           fi
 
       - name: Request SSL certificate
         if: steps.secrets.outputs.ready == 'true'
         continue-on-error: true
-        run: curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/execute/SSL/start_autossl_check" | head -c 300
+        run: platform/deploy/cpanel.sh uapi "SSL/start_autossl_check" | head -c 300
 
       - name: Smoke test
         if: steps.secrets.outputs.ready == 'true'
@@ -142,7 +145,7 @@ jobs:
           host="$SUBDOMAIN.$ROOT_DOMAIN"
           for i in 1 2 3 4 5 6; do
             body=$(curl -sS -m 20 --resolve "$host:80:$SERVER_IP" "http://$host/health" || true)
-            echo "$body"
+            echo "$body" | head -c 200; echo
             if echo "$body" | grep -q '"ok":true'; then
               code=$(curl -sS -o /dev/null -w '%{http_code}' --resolve "$host:80:$SERVER_IP" "http://$host/admin/login")
               echo "login page HTTP $code"
