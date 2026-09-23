@@ -153,6 +153,15 @@ final class App
             Audit::log($actor, 'user_create', $req->input('name'), $req->ip);
             return Response::redirect('/admin/users', 'کاربر افزوده شد');
         }
+        if ($p === '/users/import' && $post) {
+            $text = (string) ($req->post['contacts'] ?? '');
+            if (trim($text) === '') {
+                return Response::redirect('/admin/users', 'متنی برای ورود داده نشد');
+            }
+            $res = Audience::importContacts($text, $req->input('consent') === '1');
+            Audit::log($actor, 'user_import', 'added ' . $res['added'] . ' skipped ' . $res['skipped'], $req->ip);
+            return Response::redirect('/admin/users', $res['added'] . ' مخاطب افزوده شد، ' . $res['skipped'] . ' مورد رد شد');
+        }
         if (preg_match('#^/users/(\d+)/tags$#', $p, $mm) && $post) {
             Audience::updateTags((int) $mm[1], $req->input('tags'));
             return Response::redirect('/admin/users', 'برچسب‌ها ذخیره شد');
@@ -179,6 +188,20 @@ final class App
         // Connectors
         if ($p === '/connectors' && !$post) {
             return $this->page('connectors', ['connectors' => Channels::all(), 'types' => Registry::all(), 'base' => $req->baseUrl(), 'secure' => $req->secure], $req);
+        }
+        if (preg_match('#^/connectors/(\d+)/business$#', $p, $mm) && $post) {
+            Database::run('UPDATE connectors SET business_reply = ? WHERE id = ?', [trim((string) ($req->post['business_reply'] ?? '')) ?: null, (int) $mm[1]]);
+            Audit::log($actor, 'connector_business', $mm[1], $req->ip);
+            return Response::redirect('/admin/connectors', 'پاسخ خودکار ذخیره شد');
+        }
+        if (preg_match('#^/connectors/(\d+)/join$#', $p, $mm) && $post) {
+            $row = Channels::find((int) $mm[1]);
+            if ($row === null) {
+                return Response::redirect('/admin/connectors', 'پیدا نشد');
+            }
+            $res = Channels::postJoinButton($row, (string) ($req->post['join_text'] ?? 'برای دریافت اطلاع‌رسانی‌ها عضو شوید:'), $req->input('button_text') ?: 'عضویت');
+            Audit::log($actor, 'connector_join', $row['name'], $req->ip);
+            return Response::redirect('/admin/connectors', !empty($res['ok']) ? 'پیام عضویت در ' . $res['sent'] . ' گروه/کانال ارسال شد' : 'خطا: نام کاربری ربات نامشخص است');
         }
         if ($p === '/connectors' && $post) {
             $res = Channels::create($req->input('type'), $req->input('name'), (string) ($req->post['secret'] ?? ''));
@@ -216,7 +239,7 @@ final class App
         }
         if ($p === '/campaigns' && $post) {
             $at = $req->input('scheduled_at');
-            $id = Campaigns::create($req->input('name'), (int) $req->input('connector_id'), (string) ($req->post['message'] ?? ''), $req->input('tag'), $at !== '' ? date('Y-m-d H:i:s', strtotime($at)) : null);
+            $id = Campaigns::create($req->input('name'), (int) $req->input('connector_id'), (string) ($req->post['message'] ?? ''), $req->input('tag'), $at !== '' ? date('Y-m-d H:i:s', strtotime($at)) : null, $req->input('audience'));
             Audit::log($actor, 'campaign_create', (string) $id, $req->ip);
             return Response::redirect('/admin/campaigns', 'کمپین ساخته شد (پیش‌نویس)');
         }

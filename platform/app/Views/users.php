@@ -11,7 +11,21 @@
     <button>افزودن</button>
   </form>
 </section>
-<form method="get" class="search"><input name="q" value="<?= $e($q) ?>" placeholder="جستجو در نام، تلفن، برچسب"><button>جستجو</button></form>
+<section class="card">
+  <h2>ورود دسته‌ای مخاطبان از فایل</h2>
+  <p class="muted">محتوای فایل اکسل/CSV مخاطبان خودتان را اینجا بچسبانید. هر ردیف یک نفر. ستون‌ها با «،» یا Tab جدا شوند. سرستون‌ها اختیاری‌اند: نام، تلفن، ایمیل، برچسب.</p>
+  <form method="post" action="/admin/users/import" class="grid">
+    <input type="hidden" name="_csrf" value="<?= $e($csrf) ?>">
+    <label class="full">مخاطبان
+      <textarea name="contacts" rows="5" dir="ltr" placeholder="نام,تلفن,برچسب
+علی رضایی,09121234567,vip
+سارا محمدی,09120000000,تهران"></textarea>
+    </label>
+    <label class="check"><input type="checkbox" name="consent" value="1"> این افراد رضایت دریافت پیام را داده‌اند</label>
+    <button>ورود مخاطبان</button>
+  </form>
+</section>
+<form method="get" class="search"><input name="q" value="<?= $e($q) ?>" placeholder="جستجوی سریع: نام، تلفن، ایمیل، برچسب"><button>جستجو</button></form>
 <div class="table"><table>
 <tr><th>#</th><th>نام</th><th>تلفن</th><th>رضایت</th><th>عضویت فعال</th><th>دستگاه</th><th>برچسب‌ها</th><th></th></tr>
 <?php foreach ($users as $u): ?>

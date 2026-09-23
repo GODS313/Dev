@@ -13,14 +13,17 @@ final class Campaigns
     public const STATUSES = ['draft', 'scheduled', 'running', 'paused', 'done'];
     private const MAX_ATTEMPTS = 3;
 
-    public static function create(string $name, int $connectorId, string $message, string $tag, ?string $scheduledAt): int
+    public const AUDIENCES = ['subscribers', 'groups'];
+
+    public static function create(string $name, int $connectorId, string $message, string $tag, ?string $scheduledAt, string $audience = 'subscribers'): int
     {
         if (trim($message) === '' || Channels::find($connectorId) === null) {
             throw new \InvalidArgumentException('message and connector are required');
         }
+        $audience = in_array($audience, self::AUDIENCES, true) ? $audience : 'subscribers';
         return Database::insert(
-            'INSERT INTO campaigns (name, connector_id, message, tag_filter, scheduled_at) VALUES (?,?,?,?,?)',
-            [$name !== '' ? $name : 'کمپین', $connectorId, $message, Audience::normalizeTags($tag), $scheduledAt ?: null]
+            'INSERT INTO campaigns (name, connector_id, message, tag_filter, scheduled_at, audience) VALUES (?,?,?,?,?,?)',
+            [$name !== '' ? $name : 'کمپین', $connectorId, $message, Audience::normalizeTags($tag), $scheduledAt ?: null, $audience]
         );
     }
 
@@ -65,7 +68,7 @@ final class Campaigns
         $pdo = Database::pdo();
         $pdo->beginTransaction();
         $stmt = $pdo->prepare('INSERT OR IGNORE INTO deliveries (campaign_id, identity_id) VALUES (?, ?)');
-        foreach (Audience::reachable((int) $campaign['connector_id'], $campaign['tag_filter']) as $identityId) {
+        foreach (Audience::reachable((int) $campaign['connector_id'], $campaign['tag_filter'], $campaign['audience'] ?? 'subscribers') as $identityId) {
             $stmt->execute([$campaign['id'], $identityId]);
         }
         $pdo->prepare("UPDATE campaigns SET status = 'running', started_at = COALESCE(started_at, ?) WHERE id = ?")
@@ -73,8 +76,12 @@ final class Campaigns
         $pdo->commit();
     }
 
-    public static function compose(string $message): string
+    public static function compose(string $message, string $audience = 'subscribers'): string
     {
+        // Group/channel posts are public and have no per-recipient opt-out.
+        if ($audience === 'groups') {
+            return rtrim($message);
+        }
         $footer = Config::get('OPT_OUT_FOOTER', 'لغو دریافت پیام: /stop');
         return rtrim($message) . "\n\n" . $footer;
     }
@@ -89,7 +96,7 @@ final class Campaigns
         }
 
         $rows = Database::all(
-            "SELECT d.id, d.attempts, d.identity_id, i.external_id, c.id AS campaign_id, c.message, c.connector_id
+            "SELECT d.id, d.attempts, d.identity_id, i.external_id, c.id AS campaign_id, c.message, c.connector_id, c.audience
              FROM deliveries d
              JOIN campaigns c ON c.id = d.campaign_id
              JOIN identities i ON i.id = d.identity_id
@@ -102,7 +109,7 @@ final class Campaigns
             $cid = (int) $row['connector_id'];
             $channels[$cid] ??= Channels::find($cid);
             $channel = $channels[$cid];
-            $res = Channels::driver($channel)->send(Channels::secret($channel), $row['external_id'], self::compose($row['message']));
+            $res = Channels::driver($channel)->send(Channels::secret($channel), $row['external_id'], self::compose($row['message'], $row['audience'] ?? 'subscribers'));
             $now = gmdate('Y-m-d H:i:s');
             if ($res['ok']) {
                 Database::run("UPDATE deliveries SET status = 'sent', sent_at = ?, attempts = attempts + 1, error = NULL WHERE id = ?", [$now, $row['id']]);

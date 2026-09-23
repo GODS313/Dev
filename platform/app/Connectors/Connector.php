@@ -13,11 +13,15 @@ interface Connector
 
     public function label(): string;
 
-    /** Validates credentials; returns ['ok'=>bool, 'name'=>string, 'error'=>?string]. */
+    /** Validates credentials; returns ['ok'=>bool, 'name'=>string, 'username'=>?string, 'error'=>?string]. */
     public function verify(string $secret): array;
 
-    /** Returns ['ok'=>bool, 'error'=>?string, 'retry_after'=>int, 'unreachable'=>bool]. */
-    public function send(string $secret, string $externalId, string $text): array;
+    /**
+     * Sends a text message. $options may carry 'button' => ['text'=>..,'url'=>..]
+     * and 'business_connection_id' => string.
+     * Returns ['ok'=>bool, 'error'=>?string, 'retry_after'=>int, 'unreachable'=>bool].
+     */
+    public function send(string $secret, string $externalId, string $text, array $options = []): array;
 
     public function setWebhook(string $secret, string $url, string $key): array;
 
@@ -27,8 +31,10 @@ interface Connector
     public function fetchUpdates(string $secret, int $offset): array;
 
     /**
-     * Normalises a raw update to ['update_id','external_id','username','name','text']
-     * or null when it is not a private text message.
+     * Normalises a raw update to
+     * ['update_id','event','kind','external_id','username','name','title','text','business_connection_id']
+     * or null when it carries nothing the core acts on. 'event' is one of
+     * message|membership|business; 'kind' is private|group|channel.
      */
     public function parseUpdate(array $update): ?array;
 }

@@ -13,6 +13,13 @@ connectors that use only each messenger's official Bot API.
 - `cli/worker.php` – worker tick: polls inbound messages, sends queued campaign messages. Runs from cron if configured, piggybacks on web requests otherwise, and is also hit by the `platform-cron` workflow.
 - `migrations/` – SQL schema applied automatically on first request. Default DB is SQLite in `storage/`.
 
+## Reach features
+- Bulk-import your own contacts from CSV/TSV (name, phone, email, tags) on the Users page; phones are normalized and de-duplicated.
+- Fast multi-term search across name, phone, email and tags.
+- Campaigns can target opted-in private chats OR the groups/channels the bot belongs to.
+- Join button: post an invite with an inline start link into every group/channel the bot is in.
+- Business auto-reply: one reply per customer per day from a Telegram Business-connected account.
+
 ## Consent rules built in
 - A messenger user is only reachable after sending `/start` to the bot; `/stop` unsubscribes.
 - Every campaign message ends with the opt-out instruction.

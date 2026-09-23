@@ -7,12 +7,18 @@
     <input type="hidden" name="_csrf" value="<?= $e($csrf) ?>">
     <label>نام کمپین <input name="name" required></label>
     <label>کانکتور
-      <select name="connector_id"><?php foreach ($connectors as $c): ?><option value="<?= (int) $c['id'] ?>"><?= $e($c['name']) ?> (<?= (int) $c['subscribers'] ?> عضو)</option><?php endforeach; ?></select>
+      <select name="connector_id"><?php foreach ($connectors as $c): ?><option value="<?= (int) $c['id'] ?>"><?= $e($c['name']) ?> (<?= (int) $c['subscribers'] ?> عضو، <?= (int) ($c['chats'] ?? 0) ?> گروه/کانال)</option><?php endforeach; ?></select>
     </label>
-    <label>فقط کاربران با برچسب <input name="tag" placeholder="خالی = همه اعضا"></label>
+    <label>مخاطب
+      <select name="audience">
+        <option value="subscribers">اعضای خصوصی (کسانی که /start زده‌اند)</option>
+        <option value="groups">گروه‌ها و کانال‌هایی که ربات در آن‌هاست</option>
+      </select>
+    </label>
+    <label>فقط کاربران با برچسب <input name="tag" placeholder="خالی = همه؛ فقط برای اعضای خصوصی"></label>
     <label>زمان ارسال <input name="scheduled_at" type="datetime-local"></label>
     <label class="full">متن پیام <textarea name="message" rows="5" required></textarea></label>
-    <p class="muted full">پیام فقط برای کسانی ارسال می‌شود که خودشان ربات را /start کرده‌اند. راهنمای لغو عضویت (/stop) خودکار به انتهای پیام اضافه می‌شود.</p>
+    <p class="muted full">حالت «اعضای خصوصی»: پیام فقط به کسانی می‌رسد که ربات را /start کرده‌اند و راهنمای لغو (/stop) به انتها اضافه می‌شود. حالت «گروه‌ها و کانال‌ها»: پیام داخل خود گروه/کانال منتشر می‌شود.</p>
     <button>ساخت پیش‌نویس</button>
   </form>
   <?php endif; ?>
@@ -24,7 +30,7 @@
   <td><?= (int) $c['id'] ?></td>
   <td title="<?= $e($c['message']) ?>"><?= $e($c['name']) ?></td>
   <td><?= $e($c['connector_name']) ?></td>
-  <td><?= $e($c['tag_filter'] ?: 'همه') ?></td>
+  <td><?= ($c['audience'] ?? 'subscribers') === 'groups' ? 'گروه/کانال' : ($e($c['tag_filter'] ?: 'همه اعضا')) ?></td>
   <td><span class="badge <?= $e($c['status']) ?>"><?= $labels[$c['status']] ?? $e($c['status']) ?></span></td>
   <td><?= (int) $c['sent'] ?> / <?= (int) $c['total'] ?></td>
   <td><?= (int) $c['failed'] ?></td>

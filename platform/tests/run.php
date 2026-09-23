@@ -149,6 +149,52 @@ Channels::disableWebhook(Channels::find(1));
 check(Channels::poll(Channels::find(1)) === 1, 'polling fetched update');
 check((int) Database::scalar("SELECT subscribed FROM identities WHERE external_id = '777'") === 1, 'polled /start subscribed');
 
+// Bot username captured at connect time
+check(Channels::find(1)['bot_username'] === 'demo_bot', 'bot username stored');
+
+// CSV bulk import of the operator's own contacts
+$csv = "name,phone,tags\nعلی رضایی,0912-111-1111,vip\nسارا,۰۹۱۲۲۲۲۲۲۲۲,تهران\nعلی رضایی,09121111111,dup\n,,\n";
+$imp = Audience::importContacts($csv, true);
+check($imp['added'] === 2 && $imp['skipped'] === 2, 'csv import adds 2, skips dup+empty');
+check((int) Database::scalar("SELECT COUNT(*) FROM users WHERE phone = '09121111111'") === 1, 'phone normalized and de-duplicated');
+check(count(Audience::users('رضایی')) === 1, 'fast search finds imported contact by name');
+check(count(Audience::users('0912222')) === 1, 'fast search finds by normalized phone');
+
+// Group/channel membership + group campaign
+$member = fn (int $chat, string $status, string $title, int $uid) => json_encode(['update_id' => $uid, 'my_chat_member' => ['chat' => ['id' => $chat, 'type' => 'supergroup', 'title' => $title], 'new_chat_member' => ['status' => $status]]]);
+$app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $member(-100200, 'administrator', 'گروه فروش', 20)));
+$app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $member(-100300, 'member', 'کانال خبر', 21)));
+check(count(Audience::chats(1)) === 2, 'two group/channel chats registered');
+check(!in_array('-100200', array_map(fn ($id) => (string) Database::scalar('SELECT external_id FROM identities WHERE id = ?', [$id]), Audience::reachable(1, '', 'subscribers')), true), 'groups excluded from private audience');
+check(count(Audience::reachable(1, '', 'groups')) === 2, 'group audience targets both chats');
+$app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $member(-100300, 'left', 'کانال خبر', 22)));
+check(count(Audience::reachable(1, '', 'groups')) === 1, 'bot removed from a chat drops it');
+
+$calls = [];
+$gc = Campaigns::create('اطلاعیه', 1, 'سلام گروه', '', null, 'groups');
+Campaigns::start($gc);
+$gstats = Campaigns::dispatch(50, 0);
+check($gstats['sent'] === 1, 'group campaign posts to the remaining chat');
+check(!str_contains($calls[0][1]['text'], '/stop'), 'group post has no opt-out footer');
+check($calls[0][1]['chat_id'] === '-100200', 'group post targets the group chat id');
+
+// Join button posted into groups/channels
+$calls = [];
+$jres = Channels::postJoinButton(Channels::find(1), 'عضو شوید', 'عضویت');
+check($jres['ok'] && $jres['sent'] === 1, 'join button posted to one chat');
+check(isset($calls[0][1]['reply_markup']['inline_keyboard'][0][0]['url']) && str_contains($calls[0][1]['reply_markup']['inline_keyboard'][0][0]['url'], 'demo_bot?start=join'), 'join button carries start link');
+
+// Business auto-reply: once per day, only when configured
+Database::run("UPDATE connectors SET business_reply = 'ممنون از پیام شما، به‌زودی پاسخ می‌دهیم.' WHERE id = 1");
+$conn = Channels::find(1);
+$biz = fn (int $chat, int $uid) => json_encode(['update_id' => $uid, 'business_message' => ['business_connection_id' => 'bconn1', 'chat' => ['id' => $chat, 'type' => 'private'], 'from' => ['first_name' => 'C'], 'text' => 'سلام']]);
+$calls = [];
+$app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $biz(555, 30)));
+check(count($calls) === 1 && ($calls[0][1]['business_connection_id'] ?? '') === 'bconn1', 'business message gets one auto-reply with connection id');
+$app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $biz(555, 31)));
+check(count($calls) === 1, 'business auto-reply not repeated same day');
+check((int) Database::scalar("SELECT COUNT(*) FROM identities WHERE external_id = '555'") === 0, 'business sender is not added to the audience');
+
 // Devices + device sessions
 check($app->handle(req('POST', '/api/v1/devices/register', [], [], ['x-api-key' => 'nope'], '{}'))->status === 401, 'device api key required');
 $r = $app->handle(req('POST', '/api/v1/devices/register', [], [], ['x-api-key' => Devices::apiKey()], json_encode(['device_uid' => 'abc', 'platform' => 'android'])));
