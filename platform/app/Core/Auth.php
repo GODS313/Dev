@@ -19,7 +19,20 @@ final class Auth
         if (!$user || !$pass || (int) Database::scalar('SELECT COUNT(*) FROM admins') > 0) {
             return;
         }
-        self::createAdmin($user, $pass);
+        // The bootstrap password comes from the deploy secret; a short one is accepted
+        // here and the dashboard asks the operator to replace it.
+        Database::insert('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [$user, password_hash($pass, PASSWORD_DEFAULT)]);
+    }
+
+    /** True while the operator still uses a bootstrap password shorter than the policy. */
+    public static function weakPassword(int $adminId): bool
+    {
+        $pass = (string) Config::get('ADMIN_PASSWORD', '');
+        if ($pass === '' || strlen($pass) >= 10) {
+            return false;
+        }
+        $hash = Database::scalar('SELECT password_hash FROM admins WHERE id = ?', [$adminId]);
+        return is_string($hash) && password_verify($pass, $hash);
     }
 
     public static function createAdmin(string $username, string $password): int

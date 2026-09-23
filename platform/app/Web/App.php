@@ -135,7 +135,7 @@ final class App
                 'campaigns' => (int) Database::scalar("SELECT COUNT(*) FROM campaigns WHERE status IN ('running','scheduled')"),
                 'sent' => (int) Database::scalar("SELECT COUNT(*) FROM deliveries WHERE status = 'sent'"),
                 'worker' => @file_get_contents(Config::storagePath('worker.last')) ?: null,
-            ], 'cronUrl' => $req->baseUrl() . '/cron?key=' . Worker::cronKey()], $req);
+            ], 'cronUrl' => $req->baseUrl() . '/cron?key=' . Worker::cronKey(), 'weak' => Auth::weakPassword((int) $this->admin['id'])], $req);
         }
         if ($p === '/logout' && $post) {
             Sessions::revokeToken($this->token);

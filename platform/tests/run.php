@@ -62,6 +62,15 @@ function req(string $method, string $path, array $post = [], array $cookies = []
     return new Request($method, $path, [], $post, $cookies, $headers, $body, '10.0.0.1', true, 'panel.test');
 }
 
+// Short bootstrap password is accepted and flagged
+putenv('ADMIN_PASSWORD=short1');
+\App\Core\Auth::seedAdmin();
+check(\App\Core\Auth::weakPassword(1), 'short bootstrap password flagged');
+putenv('ADMIN_PASSWORD=correct-horse-battery');
+Database::run('DELETE FROM admins');
+\App\Core\Auth::seedAdmin();
+check(!\App\Core\Auth::weakPassword((int) Database::scalar('SELECT id FROM admins')), 'strong password not flagged');
+
 // Crypto
 check(Crypto::decrypt(Crypto::encrypt('secret-ä')) === 'secret-ä', 'crypto roundtrip');
 

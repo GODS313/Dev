@@ -1,4 +1,5 @@
 <h1>داشبورد</h1>
+<?php if (!empty($weak)): ?><div class="flash err">رمز فعلی شما کوتاه است. لطفاً از صفحه <a href="/admin/account">«حساب من»</a> یک رمز حداقل ۱۰ کاراکتری بگذارید.</div><?php endif; ?>
 <div class="stats">
   <div class="stat"><b><?= $stats['users'] ?></b><span>کاربر</span></div>
   <div class="stat"><b><?= $stats['subscribed'] ?></b><span>عضو فعال پیام‌رسان</span></div>
