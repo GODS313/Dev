@@ -6,6 +6,7 @@ $nav = [
     'sessions' => ['/admin/sessions', 'نشست‌ها'],
     'connectors' => ['/admin/connectors', 'کانکتورها'],
     'campaigns' => ['/admin/campaigns', 'کمپین‌ها'],
+    'tasks' => ['/admin/tasks', 'وظیفه‌ها'],
     'audit' => ['/admin/audit', 'گزارش رویدادها'],
     'account' => ['/admin/account', 'حساب من'],
 ];

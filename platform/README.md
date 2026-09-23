@@ -41,3 +41,23 @@ Actions secrets (`CPANEL_USER`, `CPANEL_PASSWORD`, `ADMIN_PASSWORD`).
 php tests/run.php
 STORAGE_DIR=/tmp/mp ADMIN_USER=admin ADMIN_PASSWORD=change-me-please php -S 127.0.0.1:8000 -t public public/index.php
 ```
+
+## Tasks (modular automation)
+- `app/Tasks/` holds independent task modules. Each has its own settings, enable
+  flag, secret, run state and log. Add task #2/#3 by implementing `Task` and
+  registering it in `Tasks\Registry` — no rewrite of the others.
+- **Task #1 — Build APK publish** (`BuildApkTask`): fetches a finished, signed APK
+  from a configured URL and publishes it to the download site over a signed
+  server-to-server API, then delivers the link (optionally to a Telegram chat the
+  bot may post to). Runs advance in resumable steps, recover after restart, skip
+  an already-published file, and never log secrets.
+- **Not possible (Telegram limitation):** a bot cannot drive another bot's panel,
+  press its buttons, or receive its files via the Bot API. That flow is replaced
+  by the server-to-server publish API above.
+
+### /x/ receiver
+`xsite/publish.php` and `xsite/dl.php` deploy to `public_html/x/`. `publish.php`
+verifies an HMAC signature using `XBUILD_SECRET` read from the panel's protected
+`platform/config/app.env` (no secret lives in the web root), stores the APK under
+`x/releases/` and writes `latest.json`. `dl.php` serves the newest release; point
+the public download button at `/x/dl.php` to always hand out the latest build.

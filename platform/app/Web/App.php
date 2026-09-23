@@ -262,6 +262,37 @@ final class App
             return Response::redirect('/admin/campaigns', $msg);
         }
 
+        // Tasks (modular automation)
+        if ($p === '/tasks' && !$post) {
+            return $this->page('tasks', [
+                'tasks' => \App\Tasks\Registry::all(),
+                'settings' => array_map(fn ($t) => \App\Tasks\Runner::settings($t->key()), \App\Tasks\Registry::all()),
+                'runs' => array_map(fn ($t) => \App\Tasks\Runner::runs($t->key(), 15), \App\Tasks\Registry::all()),
+            ], $req);
+        }
+        if (preg_match('#^/tasks/([a-z_]+)/settings$#', $p, $mm) && $post) {
+            try {
+                $task = \App\Tasks\Registry::get($mm[1]);
+            } catch (\InvalidArgumentException $e) {
+                return Response::redirect('/admin/tasks', 'وظیفه ناشناخته');
+            }
+            $secretField = $task->secretField();
+            $secret = $secretField ? (string) ($req->post[$secretField] ?? '') : null;
+            \App\Tasks\Runner::saveSettings($mm[1], $req->post, $secret, ($req->post['enabled'] ?? '') === '1');
+            Audit::log($actor, 'task_settings', $mm[1], $req->ip);
+            return Response::redirect('/admin/tasks', 'تنظیمات وظیفه ذخیره شد');
+        }
+        if (preg_match('#^/tasks/([a-z_]+)/run$#', $p, $mm) && $post) {
+            if (!\App\Tasks\Runner::enabled($mm[1])) {
+                return Response::redirect('/admin/tasks', 'این وظیفه غیرفعال است؛ اول فعالش کنید');
+            }
+            $s = \App\Tasks\Runner::settings($mm[1])['values'];
+            $run = \App\Tasks\Runner::createRun($mm[1], (string) ($s['source_url'] ?? ''));
+            $run = \App\Tasks\Runner::advance($run);
+            Audit::log($actor, 'task_run', $mm[1] . ' #' . $run['id'] . ' ' . $run['status'], $req->ip);
+            return Response::redirect('/admin/tasks', 'اجرا شد — وضعیت: ' . $run['status']);
+        }
+
         if ($p === '/audit' && !$post) {
             return $this->page('audit', ['rows' => Audit::recent()], $req);
         }

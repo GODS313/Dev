@@ -50,6 +50,11 @@ final class Worker
                     $result[$k] += $stats[$k];
                 }
             } while ($stats['sent'] + $stats['failed'] > 0 && microtime(true) - $started < $budgetSeconds);
+            try {
+                $result['tasks'] = \App\Tasks\Runner::advanceAll();
+            } catch (\Throwable $e) {
+                $result['errors'][] = 'tasks: ' . $e->getMessage();
+            }
             Database::run('DELETE FROM sessions WHERE expires_at < ?', [gmdate('Y-m-d H:i:s', time() - 86400 * 30)]);
             file_put_contents(Config::storagePath('worker.last'), gmdate('c'));
         } finally {

@@ -195,6 +195,83 @@ $app->handle(req('POST', '/hook/1/' . $conn['webhook_key'], [], [], $hdr, $biz(5
 check(count($calls) === 1, 'business auto-reply not repeated same day');
 check((int) Database::scalar("SELECT COUNT(*) FROM identities WHERE external_id = '555'") === 0, 'business sender is not added to the audience');
 
+// ---- Tasks: Build APK publish ----
+$apkBytes = "PK\x03\x04" . str_repeat("\x00", 2000);
+$published = null;
+\App\Core\Http::$transport = function (string $method, string $url, array $opts) use ($apkBytes, &$published) {
+    if ($method === 'GET' && str_contains($url, 'source')) {
+        return ['ok' => true, 'status' => 200, 'body' => $apkBytes, 'headers' => [], 'error' => null];
+    }
+    if ($method === 'GET' && str_contains($url, 'notapk')) {
+        return ['ok' => true, 'status' => 200, 'body' => 'not-an-apk', 'headers' => [], 'error' => null];
+    }
+    if ($method === 'POST' && str_contains($url, 'publish')) {
+        // Verify the signature the task computed, like the real /x/ endpoint would.
+        $secret = 'shared-build-secret';
+        $ts = $opts['headers']['X-Timestamp'];
+        $name = rawurldecode($opts['headers']['X-App-Name']);
+        $ver = rawurldecode($opts['headers']['X-App-Version']);
+        $hash = hash('sha256', $opts['body']);
+        $expected = hash_hmac('sha256', "$ts\n$name\n$ver\n$hash", $secret);
+        $okSig = hash_equals($expected, $opts['headers']['X-Signature']) && $hash === $opts['headers']['X-Content-Sha256'];
+        if (!$okSig) {
+            return ['ok' => false, 'status' => 401, 'body' => '{"ok":false,"error":"bad signature"}', 'headers' => [], 'error' => null];
+        }
+        $published = ['name' => $name, 'version' => $ver, 'size' => strlen($opts['body'])];
+        return ['ok' => true, 'status' => 200, 'body' => json_encode(['ok' => true, 'url' => 'https://etebarami.net/x/releases/' . $name . '-' . $ver . '.apk']), 'headers' => [], 'error' => null];
+    }
+    return ['ok' => false, 'status' => 404, 'body' => '', 'headers' => [], 'error' => 'unexpected'];
+};
+
+// Settings save + secret encryption + default app name
+\App\Tasks\Runner::saveSettings('build_apk', [
+    'app_name' => 'iLiveX',
+    'source_url' => 'https://build.example/source/app.apk',
+    'publish_url' => 'https://etebarami.net/x/publish.php',
+    'version' => '1.0',
+    'delivery_connector_id' => '1',
+    'delivery_chat_id' => '-100200',
+], 'shared-build-secret', true);
+$ts = \App\Tasks\Runner::settings('build_apk');
+check($ts['enabled'] === true && $ts['values']['app_name'] === 'iLiveX', 'task settings saved');
+check($ts['has_secret'] === true, 'task reports stored secret');
+check(\App\Tasks\Runner::secret('build_apk') === 'shared-build-secret', 'task secret decrypts');
+check(Database::scalar("SELECT secret_enc FROM task_settings WHERE task_key='build_apk'") !== 'shared-build-secret', 'task secret encrypted at rest');
+
+// Full run: fetch -> publish -> deliver
+$calls = [];
+$run = \App\Tasks\Runner::createRun('build_apk', 'https://build.example/source/app.apk');
+$run = \App\Tasks\Runner::advance($run);
+check($run['status'] === 'done', 'build task reaches done');
+check($published !== null && $published['name'] === 'iLiveX' && $published['version'] === '1.0', 'apk published with signed metadata');
+check(str_contains((string) $run['result'], '/x/releases/'), 'run stores published url');
+check(count(array_filter($calls, fn ($c) => $c[0] === 'sendMessage' && $c[1]['chat_id'] === '-100200')) === 1, 'link delivered to configured chat');
+
+// Dedup: same file is not re-published
+$run2 = \App\Tasks\Runner::advance(\App\Tasks\Runner::createRun('build_apk', 'https://build.example/source/app.apk'));
+check($run2['status'] === 'skipped', 'identical apk is skipped');
+
+// Invalid source is a clean failure, not a guess
+Database::run("UPDATE task_settings SET settings_json = ? WHERE task_key='build_apk'", [json_encode(['app_name' => 'iLiveX', 'source_url' => 'https://build.example/notapk', 'publish_url' => 'https://etebarami.net/x/publish.php'])]);
+$run3 = \App\Tasks\Runner::advance(\App\Tasks\Runner::createRun('build_apk', 'x'));
+check($run3['status'] === 'failed', 'non-apk source fails cleanly');
+
+// Logs never store the secret
+$allLogs = implode(' ', array_column(Database::all('SELECT log_json FROM task_runs'), 'log_json'));
+check(!str_contains($allLogs, 'shared-build-secret'), 'secret never written to run logs');
+
+// Panel pages + gated run
+$app->handle(req('POST', '/admin/logout', ['_csrf' => \App\Core\Auth::csrf($token)], $cookies));
+$token = $app->handle(req('POST', '/admin/login', ['username' => 'admin', 'password' => 'correct-horse-battery']))->cookies['mp_session'][0];
+$cookies = ['mp_session' => $token];
+$csrf = \App\Core\Auth::csrf($token);
+check($app->handle(req('GET', '/admin/tasks', [], $cookies))->status === 200, 'tasks page renders');
+Database::run("UPDATE task_settings SET enabled = 0 WHERE task_key='build_apk'");
+$flash = $app->handle(req('POST', '/admin/tasks/build_apk/run', ['_csrf' => $csrf], $cookies))->cookies['mp_flash'][0] ?? '';
+check(str_contains($flash, 'غیرفعال'), 'disabled task refuses to run');
+
+\App\Core\Http::$transport = null;
+
 // Devices + device sessions
 check($app->handle(req('POST', '/api/v1/devices/register', [], [], ['x-api-key' => 'nope'], '{}'))->status === 401, 'device api key required');
 $r = $app->handle(req('POST', '/api/v1/devices/register', [], [], ['x-api-key' => Devices::apiKey()], json_encode(['device_uid' => 'abc', 'platform' => 'android'])));
@@ -223,6 +300,11 @@ $tick = \App\Core\Worker::tick(5);
 check(is_array($tick) && $tick['errors'] === [], 'worker tick runs');
 
 echo "$count checks, $failures failed\n";
-array_map('unlink', glob("$tmp/*") ?: []);
-@rmdir($tmp);
+$rmrf = function (string $path) use (&$rmrf): void {
+    foreach (glob($path . '/*') ?: [] as $child) {
+        is_dir($child) ? $rmrf($child) : @unlink($child);
+    }
+    @rmdir($path);
+};
+$rmrf($tmp);
 exit($failures === 0 ? 0 : 1);

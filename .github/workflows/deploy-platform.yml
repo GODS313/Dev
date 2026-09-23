@@ -71,8 +71,9 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         run: |
           set -eu
-          mkdir -p stage/public_html/panel stage/platform/config stage/platform/storage
+          mkdir -p stage/public_html/panel stage/public_html/x stage/platform/config stage/platform/storage
           cp -R platform/public/. stage/public_html/panel/
+          cp platform/xsite/publish.php platform/xsite/dl.php stage/public_html/x/
           cp -R platform/app platform/cli platform/migrations stage/platform/
           cp platform/config/.htaccess stage/platform/config/
           cp platform/storage/.htaccess stage/platform/storage/
@@ -83,6 +84,7 @@ jobs:
             echo "APP_TIMEZONE=Asia/Tehran"
             echo "BASE_PATH=$PANEL_PATH"
             echo "CRON_KEY=$(printf 'cron:%s' "$ADMIN_PASSWORD" | sha256sum | cut -c1-40)"
+            echo "XBUILD_SECRET=$(printf 'xbuild:%s' "$ADMIN_PASSWORD" | sha256sum | cut -c1-48)"
           } > stage/platform/config/app.env
 
       - name: Upload over FTPS
@@ -95,6 +97,7 @@ jobs:
           set net:max-retries 3
           set net:timeout 30
           mirror -R --verbose=1 --no-perms stage/public_html/panel public_html/panel
+          mirror -R --verbose=1 --no-perms stage/public_html/x public_html/x
           mirror -R --verbose=1 --no-perms stage/platform platform
           chmod 600 platform/config/app.env
           bye
