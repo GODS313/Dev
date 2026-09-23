@@ -12,7 +12,15 @@ if [ ! -s "$tokfile" ]; then
     --data-urlencode "user=$CPANEL_USER" --data-urlencode "pass=$CPANEL_PASSWORD")
   token=$(printf '%s' "$resp" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("security_token","") if d.get("status")==1 else "")' 2>/dev/null || true)
   if [ -z "$token" ]; then
-    echo "cPanel login failed" >&2
+    echo "cPanel login failed; response summary:" >&2
+    printf '%s' "$resp" | python3 -c '
+import json,sys
+raw=sys.stdin.read()
+try:
+    d=json.loads(raw); print({k:(v if k in ("status","message","reason","redirect","notices") else "...") for k,v in d.items()})
+except Exception:
+    print("non-JSON response, first bytes:", raw[:160].replace("\n"," "))
+' >&2
     exit 1
   fi
   echo "::add-mask::$token"
