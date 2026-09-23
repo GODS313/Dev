@@ -1,0 +1,154 @@
+name: Deploy platform
+
+# Tests the modular platform and deploys it to the cPanel host as panel.<domain>.
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   CPANEL_USER, CPANEL_PASSWORD, ADMIN_PASSWORD
+# Optional: CPANEL_HOST (default below), PANEL_DOMAIN
+
+on:
+  push:
+    branches: [main, claude/modular-management-marketing-system-ng9ms1]
+    paths: ['platform/**', '.github/workflows/deploy-platform.yml']
+  pull_request:
+    paths: ['platform/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-platform
+  cancel-in-progress: false
+
+env:
+  CPANEL_HOST: ${{ secrets.CPANEL_HOST || 'cp19.fra1.ultacp.com' }}
+  ROOT_DOMAIN: etebarami.net
+  SUBDOMAIN: panel
+  SERVER_IP: 79.133.41.203
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo_sqlite, openssl, curl, mbstring
+      - name: Lint
+        run: find platform -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Tests
+        run: php platform/tests/run.php
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_PASSWORD: ${{ secrets.CPANEL_PASSWORD }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        id: secrets
+        run: |
+          if [ -z "$CPANEL_USER" ] || [ -z "$CPANEL_PASSWORD" ] || [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::warning::Deployment skipped: set CPANEL_USER, CPANEL_PASSWORD and ADMIN_PASSWORD repository secrets."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install lftp
+        if: steps.secrets.outputs.ready == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Stage files
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -eu
+          mkdir -p stage/panel_public stage/platform/config stage/platform/storage
+          cp -R platform/public/. stage/panel_public/
+          cp -R platform/app platform/cli platform/migrations stage/platform/
+          cp platform/config/.htaccess stage/platform/config/
+          cp platform/storage/.htaccess stage/platform/storage/
+          umask 077
+          {
+            echo "ADMIN_USER=${ADMIN_USER:-admin}"
+            echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
+            echo "APP_TIMEZONE=Asia/Tehran"
+          } > stage/platform/config/app.env
+
+      - name: Create subdomain
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -eu
+          out=$(curl -sS --fail-with-body -u "$CPANEL_USER:$CPANEL_PASSWORD" \
+            "https://$CPANEL_HOST:2083/execute/SubDomain/addsubdomain?domain=$SUBDOMAIN&rootdomain=$ROOT_DOMAIN&dir=panel_public" || true)
+          echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("status", d.get("status"), (d.get("errors") or [""])[0])' || echo "$out" | head -c 300
+
+      - name: Select PHP 8 for the subdomain
+        if: steps.secrets.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          set -eu
+          ver=$(curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/execute/LangPHP/php_get_installed_versions" \
+            | python3 -c 'import json,sys; v=[x for x in json.load(sys.stdin)["data"]["versions"] if x.startswith("ea-php8")]; print(sorted(v)[-1] if v else "")')
+          echo "selected: ${ver:-none}"
+          [ -n "$ver" ] && curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" \
+            "https://$CPANEL_HOST:2083/execute/LangPHP/php_set_vhost_versions?version=$ver&vhost=$SUBDOMAIN.$ROOT_DOMAIN" | head -c 300
+
+      - name: Upload over FTPS
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -eu
+          lftp -u "$CPANEL_USER,$CPANEL_PASSWORD" "$CPANEL_HOST" <<'EOF'
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set net:max-retries 3
+          set net:timeout 30
+          mirror -R --verbose=1 --no-perms stage/panel_public panel_public
+          mirror -R --verbose=1 --no-perms stage/platform platform
+          chmod 600 platform/config/app.env
+          bye
+          EOF
+
+      - name: Ensure cron worker
+        if: steps.secrets.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          set -eu
+          api2() { curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/json-api/cpanel?cpanel_jsonapi_user=$CPANEL_USER&cpanel_jsonapi_apiversion=2&$1"; }
+          if api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=listcron" | grep -q 'platform/cli/worker.php'; then
+            echo "cron already present"
+          else
+            cmd=$(python3 -c 'import urllib.parse,os; print(urllib.parse.quote("/usr/local/bin/php /home/%s/platform/cli/worker.php >/dev/null 2>&1" % os.environ["CPANEL_USER"]))')
+            api2 "cpanel_jsonapi_module=Cron&cpanel_jsonapi_func=add_line&minute=*&hour=*&day=*&month=*&weekday=*&command=$cmd" | head -c 300; echo
+          fi
+
+      - name: Request SSL certificate
+        if: steps.secrets.outputs.ready == 'true'
+        continue-on-error: true
+        run: curl -sS -u "$CPANEL_USER:$CPANEL_PASSWORD" "https://$CPANEL_HOST:2083/execute/SSL/start_autossl_check" | head -c 300
+
+      - name: Smoke test
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -eu
+          host="$SUBDOMAIN.$ROOT_DOMAIN"
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -sS -m 20 --resolve "$host:80:$SERVER_IP" "http://$host/health" || true)
+            echo "$body"
+            if echo "$body" | grep -q '"ok":true'; then
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --resolve "$host:80:$SERVER_IP" "http://$host/admin/login")
+              echo "login page HTTP $code"
+              [ "$code" = "200" ] && exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::health check failed"
+          exit 1
