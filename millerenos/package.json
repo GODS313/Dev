@@ -1,0 +1,34 @@
+{
+  "name": "millerenos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Millerenos — AI-powered commerce and business operating platform (Telegram-first).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/server",
+    "apps/miniapp"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/miniapp && npm run build -w apps/server",
+    "typecheck": "npm run typecheck -w apps/server && npm run typecheck -w apps/miniapp",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm test -w apps/server",
+    "dev": "npm run dev -w apps/server",
+    "migrate": "npm run migrate -w apps/server",
+    "licenses": "node ops/license-inventory.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.70.1"
+  }
+}
