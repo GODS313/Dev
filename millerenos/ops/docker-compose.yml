@@ -39,5 +39,19 @@ services:
     read_only: true
     security_opt: ['no-new-privileges:true']
 
+  # Optional TLS reverse proxy (automatic HTTPS). Enabled by the VPS bootstrap: docker compose --profile proxy up -d
+  caddy:
+    image: caddy:2
+    profiles: ['proxy']
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

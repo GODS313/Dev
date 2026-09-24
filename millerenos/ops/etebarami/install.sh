@@ -9,7 +9,7 @@ umask 077
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"          # …/millerenos
 ENV_FILE="$ROOT/ops/.env"
-PUBLIC_BASE_URL="https://etebarami.net/God"
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://etebarami.net/God}"
 ADMIN_IDS="8529549801"
 SECURITY_CONTACT="mailto:hazratemahdi097@gmail.com"
 
@@ -19,14 +19,14 @@ rand() { openssl rand -hex 32; }
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "== Millerenos configuration =="
-  read -rsp "Telegram bot token (from @BotFather, hidden): " BOT_TOKEN; echo
+  read -rsp "Telegram bot token (from @BotFather, hidden): " BOT_TOKEN </dev/tty; echo
   [[ "$BOT_TOKEN" =~ ^[0-9]{6,12}:[A-Za-z0-9_-]{30,}$ ]] || { echo "invalid token format"; exit 1; }
   ME="$(curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getMe")" || { echo "token rejected by Telegram"; exit 1; }
   BOT_USERNAME="$(sed -E 's/.*"username":"([^"]+)".*/\1/' <<<"$ME")"
   echo "Bot: @${BOT_USERNAME}"
-  read -rp "TRON receive address for USDT/TRX (T..., leave empty to disable crypto checkout): " TRON_ADDR
+  read -rp "TRON receive address for USDT/TRX (T..., leave empty to disable crypto checkout): " TRON_ADDR </dev/tty
   if [[ -n "$TRON_ADDR" && ! "$TRON_ADDR" =~ ^T[1-9A-HJ-NP-Za-km-z]{33}$ ]]; then echo "invalid TRON address"; exit 1; fi
-  read -rsp "TronGrid API key (optional, hidden): " TRONGRID_KEY; echo
+  read -rsp "TronGrid API key (optional, hidden): " TRONGRID_KEY </dev/tty; echo
   PG_SUPER="$(rand)"; OWNER_PW="$(rand)"; APP_PW="$(rand)"; SYSTEM_PW="$(rand)"; BACKUP_PW="$(rand)"
   cat >"$ENV_FILE" <<ENV
 NODE_ENV=production
@@ -68,8 +68,9 @@ until "${COMPOSE[@]}" exec -T db pg_isready -U postgres >/dev/null 2>&1; do slee
 "${COMPOSE[@]}" up -d --build
 
 echo "Waiting for the app…"
-for _ in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/God/readyz >/dev/null 2>&1 && break; sleep 2; done
-curl -fsS http://127.0.0.1:8080/God/readyz && echo
+BP="$(sed -E 's#^https?://[^/]+##; s#/+$##' <<<"$PUBLIC_BASE_URL")"
+for _ in $(seq 1 90); do curl -fsS "http://127.0.0.1:8080${BP}/readyz" >/dev/null 2>&1 && break; sleep 2; done
+curl -fsS "http://127.0.0.1:8080${BP}/readyz" && echo
 
 cat <<'NEXT'
 

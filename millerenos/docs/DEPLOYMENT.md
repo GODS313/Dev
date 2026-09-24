@@ -66,3 +66,19 @@ the prefix.
 
 Shared cPanel hosting without Docker/PostgreSQL cannot run this stack; use a VPS (or give the app its own small VPS
 and proxy `/God` to it).
+
+## One-command VPS install (recommended)
+On an Ubuntu/Debian VPS, as root:
+```bash
+curl -fsSLo /tmp/millerenos.sh https://raw.githubusercontent.com/GODS313/Dev/claude/millerenos-master-build-pbex95/millerenos/ops/vps/bootstrap.sh && sudo bash /tmp/millerenos.sh
+```
+It installs Docker (official script) if needed, fetches the code, asks for a domain (Enter = automatic
+`<ip>.sslip.io`, no DNS changes needed), asks for the bot token (hidden) and optional TRON address, generates all
+other secrets, starts PostgreSQL/app/worker plus Caddy with automatic HTTPS under `/God`, registers the Telegram
+webhook, and enables encrypted backups every 6 h with a weekly restore test (`ops/vps/setup-backups.sh`; the age
+key is at `/root/millerenos-backup-key.txt` — copy it off the server). Re-running the same command updates the
+installation and keeps data and settings. If ports 80/443 are already used by another web server, Caddy is skipped
+and the installer prints the proxy rule to add.
+
+Moving to `etebarami.net/God` later: point the domain (or a subdomain) at the VPS, change `PUBLIC_BASE_URL` in
+`ops/.env`, update `ops/Caddyfile`, restart, and re-run `ops/etebarami/set-webhook.sh`.
