@@ -121,6 +121,36 @@ describe('Telegram Stars subscription payments', () => {
     );
   });
 
+  it('a second charge for an already-paid invoice is recorded and flagged, not rejected', async () => {
+    const { payload } = await checkout();
+    const pay = (charge: string) =>
+      hook({
+        message: {
+          message_id: 7,
+          date: 0,
+          chat: { id: TG, type: 'private', first_name: 'M' },
+          from: { id: TG, is_bot: false, first_name: 'M' },
+          successful_payment: {
+            currency: 'XTR',
+            total_amount: 250,
+            invoice_payload: payload.payload,
+            telegram_payment_charge_id: charge,
+            provider_payment_charge_id: '',
+          },
+        },
+      });
+    assert.equal((await pay('charge_dup_a')).statusCode, 200);
+    assert.equal((await pay('charge_dup_b')).statusCode, 200, 'must not 5xx (Telegram would retry forever)');
+    const rows = await h.db.system.query(
+      `SELECT count(*)::int AS n FROM payments WHERE provider_charge_id IN ('charge_dup_a', 'charge_dup_b')`,
+    );
+    assert.equal(rows.rows[0].n, 2);
+    const flagged = await h.db.system.query(
+      `SELECT count(*)::int AS n FROM audit_logs WHERE action = 'payment.needs_review' AND metadata->>'reason' = 'invoice_not_open'`,
+    );
+    assert.equal(flagged.rows[0].n, 1);
+  });
+
   it('a payment that does not match its invoice is recorded and flagged, not applied', async () => {
     const { payload } = await checkout();
     await hook({
@@ -140,7 +170,9 @@ describe('Telegram Stars subscription payments', () => {
     });
     const p = await h.db.system.query(`SELECT count(*)::int AS n FROM payments WHERE provider_charge_id = 'charge_bad'`);
     assert.equal(p.rows[0].n, 1);
-    const a = await h.db.system.query(`SELECT count(*)::int AS n FROM audit_logs WHERE action = 'payment.needs_review'`);
+    const a = await h.db.system.query(
+      `SELECT count(*)::int AS n FROM audit_logs WHERE action = 'payment.needs_review' AND metadata->>'reason' = 'amount_mismatch'`,
+    );
     assert.equal(a.rows[0].n, 1);
   });
 

@@ -3,3 +3,4 @@ node_modules
 package-lock.json
 *.md
 *.sql
+lite/src/i18n.json

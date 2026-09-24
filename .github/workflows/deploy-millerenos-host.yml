@@ -1,0 +1,163 @@
+name: Deploy Millerenos (shared host)
+
+# Builds and tests Millerenos, then deploys the shared-hosting edition (PHP + SQLite) over FTPS to
+# https://etebarami.net/God — same connection as "Deploy platform" (this host blocks automated cPanel API logins).
+# Repository secrets: CPANEL_USER, CPANEL_PASSWORD (already used by Deploy platform) and MILLERENOS_BOT_TOKEN.
+# Server data (~/millerenos/data: database + generated secrets) is never overwritten or deleted by deploys.
+
+on:
+  push:
+    branches: [claude/millerenos-master-build-pbex95]
+    paths: ['millerenos/**', '.github/workflows/deploy-millerenos-host.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-millerenos-host
+  cancel-in-progress: false
+
+env:
+  CPANEL_HOST: ${{ secrets.CPANEL_HOST || 'cp19.fra1.ultacp.com' }}
+  PUBLIC_BASE_URL: https://etebarami.net/God
+  BASE_DIR: God
+  ADMIN_IDS: '8529549801'
+  SECURITY_CONTACT: mailto:hazratemahdi097@gmail.com
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: millerenos
+    env:
+      BOT_TOKEN: ${{ secrets.MILLERENOS_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo_sqlite, curl, mbstring, iconv
+      - name: PHP lint + tests (shared-hosting edition)
+        run: |
+          for f in lite/src/*.php lite/public/index.php lite/tests/run.php; do php -l "$f" >/dev/null; done
+          php lite/tests/run.php
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: millerenos/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Bot catalog is in sync with the Node edition
+        run: npx tsx lite/build/export-i18n.ts && git diff --exit-code lite/src/i18n.json
+      - name: Build Mini App
+        run: npm run build -w apps/miniapp
+      - name: Database for pre-rendering the website
+        run: |
+          psql postgres://postgres:postgres@localhost:5432/postgres -q -v owner_pw=o -v app_pw=a -v system_pw=s -v backup_pw=b -v db=millerenos -f ops/db/bootstrap-roles.sql
+          DATABASE_MIGRATION_URL=postgres://millerenos_owner:o@localhost:5432/millerenos npm run migrate -w apps/server
+      - name: Resolve bot username
+        run: |
+          name=MilionersStory_BoT
+          if [ -n "$BOT_TOKEN" ]; then
+            name=$(curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["username"])')
+          fi
+          echo "BOT_USERNAME=$name" >> "$GITHUB_ENV"
+      - name: Pre-render website (en/fa, SEO)
+        env:
+          DATABASE_URL: postgres://millerenos_app:a@localhost:5432/millerenos
+          DATABASE_SYSTEM_URL: postgres://millerenos_system:s@localhost:5432/millerenos
+          TELEGRAM_BOT_USERNAME: ${{ env.BOT_USERNAME }}
+        run: npx tsx lite/build/render-site.ts ../dist-site
+      - name: Assemble upload tree
+        run: bash lite/build/assemble.sh ../dist-site apps/miniapp/dist ../upload "$BASE_DIR"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: millerenos-host
+          path: upload
+          include-hidden-files: true
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}
+      CPANEL_PASSWORD: ${{ secrets.CPANEL_PASSWORD }}
+      BOT_TOKEN: ${{ secrets.MILLERENOS_BOT_TOKEN }}
+    steps:
+      - name: Check secrets
+        id: s
+        run: |
+          if [ -z "$CPANEL_USER" ] || [ -z "$CPANEL_PASSWORD" ]; then
+            echo "::warning::Deployment skipped: CPANEL_USER / CPANEL_PASSWORD secrets are missing."; echo "ready=false" >> "$GITHUB_OUTPUT"
+          else echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+          [ -n "$BOT_TOKEN" ] || echo "::warning::MILLERENOS_BOT_TOKEN secret is missing: site and Mini App deploy, but the bot stays inactive."
+      - uses: actions/download-artifact@v4
+        if: steps.s.outputs.ready == 'true'
+        with: { name: millerenos-host, path: upload }
+      - name: Install lftp
+        if: steps.s.outputs.ready == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+      - name: Write server config (only when the bot token secret exists)
+        if: steps.s.outputs.ready == 'true' && env.BOT_TOKEN != ''
+        run: |
+          set -eu
+          umask 077
+          mkdir -p upload/millerenos/config
+          {
+            echo "PUBLIC_BASE_URL=$PUBLIC_BASE_URL"
+            echo "TELEGRAM_BOT_TOKEN=$BOT_TOKEN"
+            echo "TELEGRAM_BOT_USERNAME=$(curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["username"])')"
+            echo "PLATFORM_ADMIN_TELEGRAM_IDS=$ADMIN_IDS"
+            echo "SECURITY_CONTACT=$SECURITY_CONTACT"
+          } > upload/millerenos/config/app.env
+      - name: Upload over FTPS
+        if: steps.s.outputs.ready == 'true'
+        run: |
+          set -eu
+          lftp -u "$CPANEL_USER,$CPANEL_PASSWORD" "$CPANEL_HOST" <<EOF
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set net:max-retries 3
+          set net:timeout 30
+          mkdir -p public_html/$BASE_DIR
+          mkdir -p millerenos/data
+          mirror -R --verbose=1 --no-perms upload/millerenos/src millerenos/src
+          put upload/millerenos/.htaccess -o millerenos/.htaccess
+          mirror -R --verbose=1 --no-perms upload/public_html/$BASE_DIR public_html/$BASE_DIR
+          chmod 700 millerenos/data
+          bye
+          EOF
+          if [ -f upload/millerenos/config/app.env ]; then
+            lftp -u "$CPANEL_USER,$CPANEL_PASSWORD" "$CPANEL_HOST" -e "set ftp:ssl-force true; mkdir -p millerenos/config; put upload/millerenos/config/app.env -o millerenos/config/app.env; chmod 600 millerenos/config/app.env; chmod 700 millerenos/config; bye"
+          fi
+      - name: Smoke test and connect the bot
+        if: steps.s.outputs.ready == 'true'
+        run: |
+          set -eu
+          ok=no
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -sS -m 20 "$PUBLIC_BASE_URL/readyz" || true); echo "$body" | head -c 200; echo
+            echo "$body" | grep -q '"db":"up"' && { ok=yes; break; }; sleep 10
+          done
+          [ "$ok" = yes ] || { echo "::error::$PUBLIC_BASE_URL/readyz is not healthy"; exit 1; }
+          for p in /fa/ /en/pricing /app/ /sitemap.xml; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "$PUBLIC_BASE_URL$p"); echo "$p -> $code"; [ "$code" = 200 ] || exit 1
+          done
+          if [ -n "$BOT_TOKEN" ]; then
+            key=$(printf 'cron' | openssl dgst -sha256 -hmac "$BOT_TOKEN" -hex | sed 's/^.*= //' | cut -c1-40)
+            echo "::add-mask::$key"
+            curl -fsS -m 60 "$PUBLIC_BASE_URL/cron?key=$key"; echo
+            curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print("webhook:",r.get("url"),"pending:",r.get("pending_update_count"),"last_error:",r.get("last_error_message"))'
+          fi

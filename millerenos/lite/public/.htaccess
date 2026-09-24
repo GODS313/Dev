@@ -1,0 +1,43 @@
+# Millerenos (shared hosting). Static site + Mini App are files; everything else goes to index.php.
+Options -Indexes
+DirectoryIndex index.html index.php
+CGIPassAuth On
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# live pages handled by PHP
+RewriteRule ^(en|fa)/status$ index.php [QSA,L]
+# canonical page URLs have no extension: /God/en/pricing -> en/pricing.html
+RewriteRule ^(en|fa)/?$ $1/index.html [L]
+RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI}.html -f [OR]
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^((en|fa)/[a-z-]+)$ $1.html [L]
+RewriteRule ^app$ app/ [R=301,L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+<FilesMatch "\.html$">
+Header set Content-Security-Policy "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+Header set Cache-Control "public, max-age=300"
+</FilesMatch>
+<FilesMatch "\.(css|svg)$">
+Header set Cache-Control "public, max-age=604800"
+</FilesMatch>
+</IfModule>
+
+<FilesMatch "^\.">
+Require all denied
+</FilesMatch>
+<FilesMatch "\.(sqlite|env|log|lock|ini|sh)$">
+Require all denied
+</FilesMatch>
+ErrorDocument 404 /God/404.html
