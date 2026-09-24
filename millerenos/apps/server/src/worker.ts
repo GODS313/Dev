@@ -15,11 +15,20 @@ export async function runJob(s: Services, job: ClaimedJob) {
   const { db, gateway, cfg } = s;
   switch (job.type) {
     case 'notify_user': {
-      const p = job.payload as { userId?: string; telegramUserId?: string; key?: MessageKey; vars?: Record<string, string>; raw?: string; link?: string };
+      const p = job.payload as {
+        userId?: string;
+        telegramUserId?: string;
+        key?: MessageKey;
+        vars?: Record<string, string>;
+        raw?: string;
+        link?: string;
+      };
       let chatId = p.telegramUserId ?? null;
       let locale: 'en' | 'fa' = 'en';
       if (p.userId) {
-        const u = await db.system.query('SELECT telegram_user_id::text AS tg, locale FROM users WHERE id = $1 AND deleted_at IS NULL', [p.userId]);
+        const u = await db.system.query('SELECT telegram_user_id::text AS tg, locale FROM users WHERE id = $1 AND deleted_at IS NULL', [
+          p.userId,
+        ]);
         if (!u.rows[0]?.tg) return; // user gone — nothing to send
         chatId = u.rows[0].tg;
         locale = isLocale(u.rows[0].locale) ? u.rows[0].locale : 'en';
@@ -30,14 +39,21 @@ export async function runJob(s: Services, job: ClaimedJob) {
       for (const k of Object.keys(vars)) vars[k] = String(vars[k]).replace(/[<>&]/g, ''); // HTML-safe
       const text = p.raw ?? (p.key ? t(locale, p.key, vars) : '');
       const buttons =
-        p.link && cfg.PUBLIC_BASE_URL.startsWith('https://') ? [[{ text: t(locale, 'bot.btn.open_app'), webAppUrl: miniAppUrl(cfg, `?p=${p.link}`) }]] : undefined;
+        p.link && cfg.PUBLIC_BASE_URL.startsWith('https://')
+          ? [[{ text: t(locale, 'bot.btn.open_app'), webAppUrl: miniAppUrl(cfg, `?p=${p.link}`) }]]
+          : undefined;
       await gateway.sendMessage(chatId, text, { buttons });
       return;
     }
     case 'expire_trials': {
       const expired = await db.systemTx((q) => expireDueTrials(q));
       for (const tr of expired) {
-        await enqueue(db.system, 'notify_user', { userId: tr.user_id, key: 'bot.trial_expired', link: 'plans' }, { dedupeKey: `trial_expired:${tr.id}` });
+        await enqueue(
+          db.system,
+          'notify_user',
+          { userId: tr.user_id, key: 'bot.trial_expired', link: 'plans' },
+          { dedupeKey: `trial_expired:${tr.id}` },
+        );
       }
       return;
     }

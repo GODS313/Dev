@@ -71,7 +71,7 @@ export function createBot(deps: BotDeps) {
     ctx.user = user;
     ctx.locale = user.locale;
     if (isNew) {
-      const payload = ctx.message?.text?.startsWith('/start') ? ctx.message.text.split(' ')[1] ?? '' : '';
+      const payload = ctx.message?.text?.startsWith('/start') ? (ctx.message.text.split(' ')[1] ?? '') : '';
       const source = /^src_[a-z0-9_]{1,32}$/.test(payload) ? payload.slice(4) : payload.startsWith('ref_') ? 'referral' : 'direct';
       await track(db.app, 'bot_started', { userId: user.id, props: { source } });
       if (payload.startsWith('ref_')) await attributeReferral(db.app, user.id, payload.slice(4));
@@ -249,7 +249,9 @@ export function createBot(deps: BotDeps) {
       fromTelegramId: String(ctx.from.id),
     });
     if (outcome.kind === 'activated') {
-      await ctx.reply(t(locale, 'bot.payment_success', { plan: outcome.planCode, date: fmtDate(outcome.periodEnd, locale) }), { parse_mode: 'HTML' });
+      await ctx.reply(t(locale, 'bot.payment_success', { plan: outcome.planCode, date: fmtDate(outcome.periodEnd, locale) }), {
+        parse_mode: 'HTML',
+      });
     } else if (outcome.kind === 'needs_review') {
       await ctx.reply(t(locale, 'bot.payment_review', { ref: p.telegram_payment_charge_id.slice(-10) }));
       for (const adminId of cfg.PLATFORM_ADMIN_TELEGRAM_IDS) {
@@ -287,7 +289,9 @@ export function createBot(deps: BotDeps) {
     await ctx.answerCallbackQuery();
     await ctx.editMessageText(t(ctx.locale!, 'bot.choose_language'), { reply_markup: languageKeyboard() });
   });
-  bot.chatType('private').command('language', (ctx) => ctx.reply(t(ctx.locale!, 'bot.choose_language'), { reply_markup: languageKeyboard() }));
+  bot
+    .chatType('private')
+    .command('language', (ctx) => ctx.reply(t(ctx.locale!, 'bot.choose_language'), { reply_markup: languageKeyboard() }));
 
   bot.callbackQuery('menu:invite', async (ctx) => {
     const locale = ctx.locale!;
@@ -303,9 +307,9 @@ export function createBot(deps: BotDeps) {
     await ctx.reply('📱', { reply_markup: new InlineKeyboard().webApp(t(locale, 'bot.btn.open_app'), miniAppUrl(cfg)) });
   });
   bot.chatType('private').command('help', (ctx) => ctx.reply(t(ctx.locale!, 'bot.help')));
-  bot.chatType('private').command('privacy', (ctx) =>
-    ctx.reply(t(ctx.locale!, 'bot.privacy', { link: `${cfg.PUBLIC_BASE_URL}/${ctx.locale}/privacy` })),
-  );
+  bot
+    .chatType('private')
+    .command('privacy', (ctx) => ctx.reply(t(ctx.locale!, 'bot.privacy', { link: `${cfg.PUBLIC_BASE_URL}/${ctx.locale}/privacy` })));
 
   bot.on('callback_query:data', (ctx) => ctx.answerCallbackQuery()); // stale buttons
   bot.chatType('private').on('message', async (ctx) => {

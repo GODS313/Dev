@@ -6,10 +6,9 @@ const DELETION_GRACE_DAYS = 14;
 
 /** Export of the personal data Millerenos holds about the user (JSON). */
 export async function exportUserData(q: Queryable, userId: string) {
-  const user = await q.query(
-    'SELECT id, telegram_user_id::text, first_name, username, locale, created_at FROM users WHERE id = $1',
-    [userId],
-  );
+  const user = await q.query('SELECT id, telegram_user_id::text, first_name, username, locale, created_at FROM users WHERE id = $1', [
+    userId,
+  ]);
   const memberships = await q.query('SELECT workspace_id, role, created_at FROM workspace_members WHERE user_id = $1', [userId]);
   const trials = await q.query('SELECT started_at, expires_at, status FROM trials WHERE user_id = $1', [userId]);
   const tickets = await q.query(

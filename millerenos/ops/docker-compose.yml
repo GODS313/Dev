@@ -1,0 +1,43 @@
+# Single-host deployment (staging or small production). Secrets come from ops/.env (not committed).
+name: millerenos
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in ops/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/bootstrap-roles.sql:/bootstrap/bootstrap-roles.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: .., dockerfile: ops/Dockerfile }
+    command: ['node', 'apps/server/dist/db/migrate-cli.js']
+    env_file: .env
+    depends_on: { db: { condition: service_healthy } }
+    restart: 'no'
+
+  app:
+    build: { context: .., dockerfile: ops/Dockerfile }
+    env_file: .env
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    ports: ['127.0.0.1:8080:8080'] # expose through a TLS reverse proxy only
+    restart: unless-stopped
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+
+  worker:
+    build: { context: .., dockerfile: ops/Dockerfile }
+    command: ['node', 'apps/server/dist/worker.js']
+    env_file: .env
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+    read_only: true
+    security_opt: ['no-new-privileges:true']
+
+volumes:
+  pgdata:

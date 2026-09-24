@@ -9,7 +9,11 @@ import { createAiProvider } from './modules/ai/provider.js';
 import { NullGateway } from './modules/billing/gateway.js';
 
 /** Wires infrastructure into the Services bag used by HTTP routes and the worker. */
-export async function createServices(cfg: Config, log: Logger, opts: { botInfo?: UserFromGetMe } = {}): Promise<Services & { bot?: ReturnType<typeof createBot>['bot'] }> {
+export async function createServices(
+  cfg: Config,
+  log: Logger,
+  opts: { botInfo?: UserFromGetMe } = {},
+): Promise<Services & { bot?: ReturnType<typeof createBot>['bot'] }> {
   const db = createDb({ appUrl: cfg.DATABASE_URL, systemUrl: cfg.DATABASE_SYSTEM_URL, max: cfg.DATABASE_POOL_MAX });
   const ai = createAiProvider(cfg);
   if (!cfg.TELEGRAM_BOT_TOKEN) {

@@ -42,8 +42,16 @@ export async function setupDatabase(name: string) {
   const db = `millerenos_test_${name}_${process.pid}`;
   psql(PG.admin, ['-c', `DROP DATABASE IF EXISTS ${db}`]);
   psql(PG.admin, [
-    '-v', 'owner_pw=test_owner', '-v', 'app_pw=test_app', '-v', 'system_pw=test_system', '-v', `db=${db}`,
-    '-f', new URL('../../../ops/db/bootstrap-roles.sql', import.meta.url).pathname,
+    '-v',
+    'owner_pw=test_owner',
+    '-v',
+    'app_pw=test_app',
+    '-v',
+    'system_pw=test_system',
+    '-v',
+    `db=${db}`,
+    '-f',
+    new URL('../../../ops/db/bootstrap-roles.sql', import.meta.url).pathname,
   ]);
   const base = (user: string, pw: string) => `postgres://${user}:${pw}@${PG.host}:${PG.port}/${db}`;
   await migrate(base('millerenos_owner', 'test_owner'));
@@ -77,7 +85,11 @@ export function captureBotApi(services: Services & { bot?: { api: { config: { us
   services.bot!.api.config.use(async (_prev: unknown, method: string, payload: Record<string, unknown>) => {
     calls.push({ method, payload });
     const result =
-      method === 'createInvoiceLink' ? 'https://t.me/$invoice_test' : method === 'sendMessage' ? { message_id: 1, date: 0, chat: { id: 1, type: 'private' } } : true;
+      method === 'createInvoiceLink'
+        ? 'https://t.me/$invoice_test'
+        : method === 'sendMessage'
+          ? { message_id: 1, date: 0, chat: { id: 1, type: 'private' } }
+          : true;
     return { ok: true, result } as never;
   });
   return calls;
@@ -104,12 +116,19 @@ export async function makeHarness(name: string, overrides: Record<string, string
   };
 }
 
-export function initDataFor(user: { id: number; first_name?: string; username?: string; language_code?: string }, authDate = Math.floor(Date.now() / 1000)) {
+export function initDataFor(
+  user: { id: number; first_name?: string; username?: string; language_code?: string },
+  authDate = Math.floor(Date.now() / 1000),
+) {
   return signInitData({ auth_date: String(authDate), query_id: 'AAE', user: JSON.stringify({ first_name: 'Test', ...user }) }, BOT_TOKEN);
 }
 
 export async function login(h: Awaited<ReturnType<typeof makeHarness>>, tgId: number, extra: Record<string, string> = {}) {
-  const res = await h.app.inject({ method: 'POST', url: '/api/v1/auth/telegram', payload: { initData: initDataFor({ id: tgId, ...extra }) } });
+  const res = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/telegram',
+    payload: { initData: initDataFor({ id: tgId, ...extra }) },
+  });
   if (res.statusCode !== 200) throw new Error(`login failed ${res.statusCode} ${res.body}`);
   const body = res.json();
   return { token: body.token as string, user: body.user, auth: { authorization: `Bearer ${body.token}` } };

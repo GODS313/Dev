@@ -133,7 +133,10 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
           .object({
             name: zText(80, 1).optional(),
             default_locale: zLocale.optional(),
-            currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+            currency: z
+              .string()
+              .regex(/^[A-Z]{3}$/)
+              .optional(),
             ai_mode: z.enum(['MANUAL', 'SUGGEST_ONLY', 'APPROVAL_REQUIRED', 'AUTO_ALLOWED']).optional(),
             business_policies: zText(4000).optional(),
             store_published: z.boolean().optional(),
@@ -183,7 +186,11 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
   app.get('/api/v1/workspaces/:wid/products', async (req) =>
     inWorkspace(req, 'staff', async ({ q, wid }) => {
       const qs = parse(
-        z.object({ status: z.enum(['draft', 'active', 'archived']).optional(), cursor: z.iso.datetime().optional(), limit: z.coerce.number().optional() }),
+        z.object({
+          status: z.enum(['draft', 'active', 'archived']).optional(),
+          cursor: z.iso.datetime().optional(),
+          limit: z.coerce.number().optional(),
+        }),
         req.query,
       );
       return listProducts(q, wid, qs);
@@ -238,7 +245,14 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
       const { oid } = parse(z.object({ oid: zUuid }).passthrough(), req.params);
       const body = parse(z.object({ status: z.enum(['confirmed', 'paid', 'fulfilled', 'cancelled', 'refunded']) }), req.body);
       const order = await transitionOrder(q, wid, oid, body.status, userId);
-      await audit(q, { action: 'order.status_changed', actorUserId: userId, workspaceId: wid, targetType: 'order', targetId: oid, metadata: { to: body.status } });
+      await audit(q, {
+        action: 'order.status_changed',
+        actorUserId: userId,
+        workspaceId: wid,
+        targetType: 'order',
+        targetId: oid,
+        metadata: { to: body.status },
+      });
       return order;
     }),
   );
@@ -291,17 +305,27 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
     const body = parse(z.object({ customerMessage: zText(2000, 1) }), req.body);
     return suggestReply(db, s.ai, cfg, ctx, body.customerMessage);
   });
-  app.post('/api/v1/workspaces/:wid/ai/product-description', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
-    const ctx = await aiContext(req);
-    const body = parse(z.object({ name: zText(120, 1), notes: zText(1500), language: zLocale }), req.body);
-    return draftProductDescription(db, s.ai, cfg, ctx, body);
-  });
+  app.post(
+    '/api/v1/workspaces/:wid/ai/product-description',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      const ctx = await aiContext(req);
+      const body = parse(z.object({ name: zText(120, 1), notes: zText(1500), language: zLocale }), req.body);
+      return draftProductDescription(db, s.ai, cfg, ctx, body);
+    },
+  );
   app.post('/api/v1/workspaces/:wid/ai/suggestions/:sid/review', async (req) =>
     inWorkspace(req, 'admin', async ({ q, wid, userId }) => {
       const { sid } = parse(z.object({ sid: zUuid }).passthrough(), req.params);
       const body = parse(z.object({ decision: z.enum(['approved', 'rejected']) }), req.body);
       await reviewSuggestion(q, wid, sid, body.decision);
-      await audit(q, { action: `ai.suggestion_${body.decision}`, actorUserId: userId, workspaceId: wid, targetType: 'ai_request', targetId: sid });
+      await audit(q, {
+        action: `ai.suggestion_${body.decision}`,
+        actorUserId: userId,
+        workspaceId: wid,
+        targetType: 'ai_request',
+        targetId: sid,
+      });
       return { ok: true };
     }),
   );
@@ -334,7 +358,10 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
     const { slug } = parse(z.object({ slug: z.string().max(40) }), req.params);
     const body = parse(
       z.object({
-        items: z.array(z.object({ variantId: zUuid, quantity: z.number().int().min(1).max(99) })).min(1).max(20),
+        items: z
+          .array(z.object({ variantId: zUuid, quantity: z.number().int().min(1).max(99) }))
+          .min(1)
+          .max(20),
         note: zText(500).optional(),
         idempotencyKey: zIdem,
       }),
@@ -371,7 +398,14 @@ export async function apiRoutes(app: FastifyInstance, s: Services) {
     });
     const { order } = result;
     return {
-      order: { id: order.id, number: order.number, status: order.status, total_minor: order.total_minor, currency: order.currency, items: order.items },
+      order: {
+        id: order.id,
+        number: order.number,
+        status: order.status,
+        total_minor: order.total_minor,
+        currency: order.currency,
+        items: order.items,
+      },
       deliveryInfo: store.deliveryInfo,
       supportContact: store.supportContact,
     };

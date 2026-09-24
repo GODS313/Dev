@@ -18,15 +18,35 @@ describe('AI assistant (grounded, merchant-controlled)', () => {
   let m: Awaited<ReturnType<typeof loginWithTrial>>;
   const ai = new FakeAi();
   const suggest = (msg = 'How much is green tea?') =>
-    h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${m.workspaceId}/ai/reply-suggestion`, headers: m.auth, payload: { customerMessage: msg } });
+    h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${m.workspaceId}/ai/reply-suggestion`,
+      headers: m.auth,
+      payload: { customerMessage: msg },
+    });
 
   before(async () => {
     h = await makeHarness('ai', { TRIAL_AI_REQUESTS: '3' });
     h.services.ai = ai;
     m = await loginWithTrial(h, 6001, 'Tea');
-    await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${m.workspaceId}/products`, headers: m.auth, payload: { name: 'Green tea', priceMinor: 1250, stock: 4 } });
-    await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${m.workspaceId}/faq`, headers: m.auth, payload: { question: 'Do you ship?', answer: 'Pickup only.' } });
-    await h.app.inject({ method: 'PATCH', url: `/api/v1/workspaces/${m.workspaceId}`, headers: m.auth, payload: { business_policies: 'No refunds on opened tea.' } });
+    await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${m.workspaceId}/products`,
+      headers: m.auth,
+      payload: { name: 'Green tea', priceMinor: 1250, stock: 4 },
+    });
+    await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${m.workspaceId}/faq`,
+      headers: m.auth,
+      payload: { question: 'Do you ship?', answer: 'Pickup only.' },
+    });
+    await h.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/workspaces/${m.workspaceId}`,
+      headers: m.auth,
+      payload: { business_policies: 'No refunds on opened tea.' },
+    });
   });
   after(() => h.close());
 
@@ -44,10 +64,20 @@ describe('AI assistant (grounded, merchant-controlled)', () => {
   });
 
   it('approval mode marks suggestions pending review; manual mode disables AI', async () => {
-    await h.app.inject({ method: 'PATCH', url: `/api/v1/workspaces/${m.workspaceId}`, headers: m.auth, payload: { ai_mode: 'APPROVAL_REQUIRED' } });
+    await h.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/workspaces/${m.workspaceId}`,
+      headers: m.auth,
+      payload: { ai_mode: 'APPROVAL_REQUIRED' },
+    });
     const r = await suggest();
     assert.equal(r.json().requiresApproval, true);
-    const review = await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${m.workspaceId}/ai/suggestions/${r.json().id}/review`, headers: m.auth, payload: { decision: 'approved' } });
+    const review = await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${m.workspaceId}/ai/suggestions/${r.json().id}/review`,
+      headers: m.auth,
+      payload: { decision: 'approved' },
+    });
     assert.equal(review.statusCode, 200);
     await h.app.inject({ method: 'PATCH', url: `/api/v1/workspaces/${m.workspaceId}`, headers: m.auth, payload: { ai_mode: 'MANUAL' } });
     const off = await suggest();
@@ -55,7 +85,12 @@ describe('AI assistant (grounded, merchant-controlled)', () => {
   });
 
   it('enforces the trial AI quota', async () => {
-    await h.app.inject({ method: 'PATCH', url: `/api/v1/workspaces/${m.workspaceId}`, headers: m.auth, payload: { ai_mode: 'SUGGEST_ONLY' } });
+    await h.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/workspaces/${m.workspaceId}`,
+      headers: m.auth,
+      payload: { ai_mode: 'SUGGEST_ONLY' },
+    });
     const r = await suggest(); // 3rd request
     assert.equal(r.statusCode, 200);
     const over = await suggest();

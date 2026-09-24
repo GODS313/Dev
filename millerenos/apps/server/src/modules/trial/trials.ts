@@ -70,9 +70,7 @@ export async function startTrial(
 
 /** Marks due trials expired (data is kept) and returns them so owners can be notified. */
 export async function expireDueTrials(q: Queryable): Promise<TrialRow[]> {
-  const res = await q.query(
-    `UPDATE trials SET status = 'expired' WHERE status = 'active' AND expires_at <= now() RETURNING *`,
-  );
+  const res = await q.query(`UPDATE trials SET status = 'expired' WHERE status = 'active' AND expires_at <= now() RETURNING *`);
   for (const t of res.rows) await track(q, 'trial_expired', { userId: t.user_id, workspaceId: t.workspace_id });
   return res.rows;
 }

@@ -12,7 +12,12 @@ describe('Telegram Stars subscription payments', () => {
 
   const checkout = async () => {
     h.calls.length = 0;
-    const res = await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${m.workspaceId}/billing/checkout`, headers: m.auth, payload: { plan: 'starter' } });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${m.workspaceId}/billing/checkout`,
+      headers: m.auth,
+      payload: { plan: 'starter' },
+    });
     assert.equal(res.statusCode, 200, res.body);
     const call = h.calls.find((c) => c.method === 'createInvoiceLink')!;
     return { res: res.json(), payload: call.payload };
@@ -42,7 +47,14 @@ describe('Telegram Stars subscription payments', () => {
   it('pre-checkout accepts a matching invoice and rejects tampered amounts or another payer', async () => {
     const { payload } = await checkout();
     const pcq = (over: Record<string, unknown>) => ({
-      pre_checkout_query: { id: `pcq${Math.random()}`, from: { id: TG, is_bot: false, first_name: 'M' }, currency: 'XTR', total_amount: 250, invoice_payload: payload.payload, ...over },
+      pre_checkout_query: {
+        id: `pcq${Math.random()}`,
+        from: { id: TG, is_bot: false, first_name: 'M' },
+        currency: 'XTR',
+        total_amount: 250,
+        invoice_payload: payload.payload,
+        ...over,
+      },
     });
     h.calls.length = 0;
     await hook(pcq({}));
@@ -62,7 +74,13 @@ describe('Telegram Stars subscription payments', () => {
         date: Math.floor(Date.now() / 1000),
         chat: { id: TG, type: 'private', first_name: 'M' },
         from: { id: TG, is_bot: false, first_name: 'M' },
-        successful_payment: { currency: 'XTR', total_amount: 250, invoice_payload: payload.payload, telegram_payment_charge_id: 'charge_1', provider_payment_charge_id: '' },
+        successful_payment: {
+          currency: 'XTR',
+          total_amount: 250,
+          invoice_payload: payload.payload,
+          telegram_payment_charge_id: 'charge_1',
+          provider_payment_charge_id: '',
+        },
       },
     };
     assert.equal((await hook(paid)).statusCode, 200);
@@ -75,7 +93,10 @@ describe('Telegram Stars subscription payments', () => {
     assert.equal(ws.json().access.plan, 'starter');
     const trial = await h.db.system.query('SELECT status FROM trials WHERE workspace_id = $1', [m.workspaceId]);
     assert.equal(trial.rows[0].status, 'converted');
-    const sub = await h.db.system.query('SELECT current_period_end - current_period_start AS d FROM subscriptions WHERE workspace_id = $1', [m.workspaceId]);
+    const sub = await h.db.system.query(
+      'SELECT current_period_end - current_period_start AS d FROM subscriptions WHERE workspace_id = $1',
+      [m.workspaceId],
+    );
     assert.equal(sub.rows[0].d.days, 30);
 
     // renewal extends the same subscription
@@ -84,11 +105,20 @@ describe('Telegram Stars subscription payments', () => {
     paid2.message.successful_payment.invoice_payload = second.payload.payload as string;
     paid2.message.successful_payment.telegram_payment_charge_id = 'charge_2';
     await hook(paid2);
-    const renewed = await h.db.system.query('SELECT count(*)::int AS n, max(current_period_end - current_period_start) AS d FROM subscriptions WHERE workspace_id = $1', [m.workspaceId]);
+    const renewed = await h.db.system.query(
+      'SELECT count(*)::int AS n, max(current_period_end - current_period_start) AS d FROM subscriptions WHERE workspace_id = $1',
+      [m.workspaceId],
+    );
     assert.equal(renewed.rows[0].n, 1);
     assert.equal(renewed.rows[0].d.days, 60);
-    const events = await h.db.system.query(`SELECT name FROM analytics_events WHERE workspace_id = $1 AND name LIKE 'subscription_%' ORDER BY id`, [m.workspaceId]);
-    assert.deepEqual(events.rows.map((r) => r.name), ['subscription_started', 'subscription_renewed']);
+    const events = await h.db.system.query(
+      `SELECT name FROM analytics_events WHERE workspace_id = $1 AND name LIKE 'subscription_%' ORDER BY id`,
+      [m.workspaceId],
+    );
+    assert.deepEqual(
+      events.rows.map((r) => r.name),
+      ['subscription_started', 'subscription_renewed'],
+    );
   });
 
   it('a payment that does not match its invoice is recorded and flagged, not applied', async () => {
@@ -99,7 +129,13 @@ describe('Telegram Stars subscription payments', () => {
         date: 0,
         chat: { id: TG, type: 'private', first_name: 'M' },
         from: { id: TG, is_bot: false, first_name: 'M' },
-        successful_payment: { currency: 'XTR', total_amount: 1, invoice_payload: payload.payload, telegram_payment_charge_id: 'charge_bad', provider_payment_charge_id: '' },
+        successful_payment: {
+          currency: 'XTR',
+          total_amount: 1,
+          invoice_payload: payload.payload,
+          telegram_payment_charge_id: 'charge_bad',
+          provider_payment_charge_id: '',
+        },
       },
     });
     const p = await h.db.system.query(`SELECT count(*)::int AS n FROM payments WHERE provider_charge_id = 'charge_bad'`);
@@ -113,11 +149,21 @@ describe('Telegram Stars subscription payments', () => {
     const admin = await login(h, 999);
     const pay = await h.db.system.query(`SELECT id FROM payments WHERE provider_charge_id = 'charge_1'`);
     h.calls.length = 0;
-    const res = await h.app.inject({ method: 'POST', url: `/api/admin/payments/${pay.rows[0].id}/refund`, headers: admin.auth, payload: { reason: 'customer request' } });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: `/api/admin/payments/${pay.rows[0].id}/refund`,
+      headers: admin.auth,
+      payload: { reason: 'customer request' },
+    });
     assert.equal(res.statusCode, 200, res.body);
     assert.equal(h.calls[0]!.method, 'refundStarPayment');
     assert.equal(h.calls[0]!.payload.telegram_payment_charge_id, 'charge_1');
-    const again = await h.app.inject({ method: 'POST', url: `/api/admin/payments/${pay.rows[0].id}/refund`, headers: admin.auth, payload: { reason: 'double' } });
+    const again = await h.app.inject({
+      method: 'POST',
+      url: `/api/admin/payments/${pay.rows[0].id}/refund`,
+      headers: admin.auth,
+      payload: { reason: 'double' },
+    });
     assert.equal(again.statusCode, 409);
   });
 });

@@ -35,5 +35,7 @@ table{border-collapse:collapse;width:100%;font-size:16px}th,td{text-align:start;
 footer.site{margin-top:56px;border-top:1px solid var(--mx-border);background:var(--mx-surface);font-size:15px}
 footer.site .wrap{display:flex;gap:24px;flex-wrap:wrap;justify-content:space-between;padding-top:24px;padding-bottom:32px}
 footer.site nav{display:flex;gap:14px;flex-wrap:wrap}footer.site a{color:var(--mx-ink-2)}
+@media (max-width:720px){header.site .wrap{gap:8px 12px;padding-top:10px;padding-bottom:6px}.lang{margin-inline-start:auto}
+nav.main{order:3;width:100%;flex-wrap:nowrap;overflow-x:auto;margin:0;gap:18px;font-size:15px;scrollbar-width:none}nav.main a{white-space:nowrap}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 `;

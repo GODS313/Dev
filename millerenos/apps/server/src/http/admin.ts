@@ -44,7 +44,9 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
     await db.system.query('SELECT 1');
     const dbLatencyMs = Date.now() - t0;
     const backups = await db.system.query(`SELECT kind, status, detail, created_at FROM backup_runs ORDER BY created_at DESC LIMIT 5`);
-    const failedJobs = await db.system.query(`SELECT id::text, type, last_error, finished_at FROM jobs WHERE status = 'failed' ORDER BY finished_at DESC LIMIT 10`);
+    const failedJobs = await db.system.query(
+      `SELECT id::text, type, last_error, finished_at FROM jobs WHERE status = 'failed' ORDER BY finished_at DESC LIMIT 10`,
+    );
     return {
       db: { ok: true, latencyMs: dbLatencyMs },
       jobs: { stats: await jobStats(db.system), recentFailures: failedJobs.rows },
@@ -82,7 +84,13 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
       if (target.rows[0].platform_role === 'superadmin') throw new AppError('forbidden', 'Superadmins cannot be blocked here');
       await q.query('UPDATE users SET is_blocked = $2 WHERE id = $1', [id, body.blocked]);
       if (body.blocked) await revokeAllSessions(q, id);
-      await audit(q, { action: body.blocked ? 'admin.user_blocked' : 'admin.user_unblocked', actorUserId: actor.id, targetType: 'user', targetId: id, metadata: { reason: body.reason } });
+      await audit(q, {
+        action: body.blocked ? 'admin.user_blocked' : 'admin.user_unblocked',
+        actorUserId: actor.id,
+        targetType: 'user',
+        targetId: id,
+        metadata: { reason: body.reason },
+      });
     });
     return { ok: true };
   });
@@ -95,7 +103,13 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
     await db.systemTx(async (q) => {
       await q.query(`UPDATE users SET platform_role = $2 WHERE id = $1 AND platform_role <> 'superadmin'`, [id, body.role]);
       await revokeAllSessions(q, id);
-      await audit(q, { action: 'admin.role_changed', actorUserId: actor.id, targetType: 'user', targetId: id, metadata: { role: body.role } });
+      await audit(q, {
+        action: 'admin.role_changed',
+        actorUserId: actor.id,
+        targetType: 'user',
+        targetId: id,
+        metadata: { role: body.role },
+      });
     });
     return { ok: true };
   });
@@ -142,13 +156,22 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
 
   app.get('/api/admin/flags', async (req) => {
     await staff(req);
-    return { items: (await db.system.query('SELECT key, enabled, rollout_percent, allow_workspaces, description, updated_at FROM feature_flags ORDER BY key')).rows };
+    return {
+      items: (
+        await db.system.query(
+          'SELECT key, enabled, rollout_percent, allow_workspaces, description, updated_at FROM feature_flags ORDER BY key',
+        )
+      ).rows,
+    };
   });
 
   app.patch('/api/admin/flags/:key', async (req) => {
     const actor = await staff(req, ['superadmin']);
     const { key } = parse(z.object({ key: z.string().regex(/^[a-z0-9_.]{2,64}$/) }), req.params);
-    const body = parse(z.object({ enabled: z.boolean().optional(), rollout_percent: z.number().int().min(0).max(100).optional() }).strict(), req.body);
+    const body = parse(
+      z.object({ enabled: z.boolean().optional(), rollout_percent: z.number().int().min(0).max(100).optional() }).strict(),
+      req.body,
+    );
     await db.systemTx(async (q) => {
       const r = await q.query(
         `UPDATE feature_flags SET enabled = coalesce($2, enabled), rollout_percent = coalesce($3, rollout_percent), updated_at = now()
@@ -203,7 +226,13 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
     const owner = await addTicketMessage(db.system, id, { userId: u.id, asStaff: true }, body.body);
     if (body.close) await db.system.query(`UPDATE support_tickets SET status = 'resolved' WHERE id = $1`, [id]);
     await audit(db.system, { action: 'support.replied', actorUserId: u.id, targetType: 'ticket', targetId: id });
-    if (owner.tg) await enqueue(db.system, 'notify_user', { telegramUserId: owner.tg, key: 'bot.ticket_reply', vars: { ref: owner.reference }, link: 'support' });
+    if (owner.tg)
+      await enqueue(db.system, 'notify_user', {
+        telegramUserId: owner.tg,
+        key: 'bot.ticket_reply',
+        vars: { ref: owner.reference },
+        link: 'support',
+      });
     return { ok: true };
   });
 }

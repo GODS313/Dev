@@ -39,7 +39,7 @@ export async function migrate(connectionString: string, log: (msg: string) => vo
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
-        throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
+        throw new Error(`Migration ${file} failed: ${(err as Error).message}`, { cause: err });
       }
       done.push(file);
     }

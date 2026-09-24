@@ -1,0 +1,67 @@
+name: Millerenos CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['millerenos/**', '.github/workflows/millerenos-ci.yml']
+  pull_request:
+    paths: ['millerenos/**', '.github/workflows/millerenos-ci.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: millerenos-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: millerenos
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: millerenos/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npx eslint .
+      - name: Format
+        run: npx prettier --check .
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build (server + Mini App)
+        run: npm run build
+      - name: Tests (unit + integration against PostgreSQL)
+        run: npm test
+      - name: Shell syntax
+        run: bash -n ops/backup/*.sh
+      - name: Dependency audit (production, high+)
+        run: npm audit --omit=dev --audit-level=high
+      - name: License inventory
+        run: npm run licenses -- --check
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f ops/Dockerfile -t millerenos:ci .

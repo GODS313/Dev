@@ -31,7 +31,13 @@ export function webRoutes(app: FastifyInstance, deps: { cfg: Config; db: Db }) {
   const ctaHref = (page: string) =>
     cfg.TELEGRAM_BOT_USERNAME ? `https://t.me/${cfg.TELEGRAM_BOT_USERNAME}?start=src_web_${page.replace(/-/g, '_')}` : null;
 
-  function layout(locale: Locale, pageId: PageId | null, path: string, head: { title: string; description: string; noindex?: boolean; jsonLd?: unknown[] }, body: string) {
+  function layout(
+    locale: Locale,
+    pageId: PageId | null,
+    path: string,
+    head: { title: string; description: string; noindex?: boolean; jsonLd?: unknown[] },
+    body: string,
+  ) {
     const c = COPY[locale];
     const other: Locale = locale === 'en' ? 'fa' : 'en';
     const canonical = pageId ? url(locale, path) : null;
@@ -42,7 +48,9 @@ export function webRoutes(app: FastifyInstance, deps: { cfg: Config; db: Db }) {
     const navItems = (['features', 'pricing', 'integrations', 'security', 'about', 'contact'] as const)
       .map((id) => `<a href="/${locale}/${id}"${pageId === id ? ' aria-current="page"' : ''}>${esc(c.nav[id])}</a>`)
       .join('');
-    const jsonLd = (head.jsonLd ?? []).map((j) => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`).join('');
+    const jsonLd = (head.jsonLd ?? [])
+      .map((j) => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`)
+      .join('');
     return `<!doctype html>
 <html lang="${locale}" dir="${RTL[locale] ? 'rtl' : 'ltr'}">
 <head>
@@ -137,7 +145,14 @@ ${jsonLd}
         `</div>`;
     }
     if (id === 'integrations') {
-      const label = (s: string) => (s === 'OFFICIAL_SUPPORTED' ? (locale === 'fa' ? 'پشتیبانی رسمی' : 'Supported') : locale === 'fa' ? 'هنوز در دسترس نیست' : 'Not available yet');
+      const label = (s: string) =>
+        s === 'OFFICIAL_SUPPORTED'
+          ? locale === 'fa'
+            ? 'پشتیبانی رسمی'
+            : 'Supported'
+          : locale === 'fa'
+            ? 'هنوز در دسترس نیست'
+            : 'Not available yet';
       extra =
         `<table><thead><tr><th>${locale === 'fa' ? 'پلتفرم' : 'Platform'}</th><th>${locale === 'fa' ? 'وضعیت' : 'Status'}</th><th>${locale === 'fa' ? 'روش' : 'Method'}</th></tr></thead><tbody>` +
         CHANNELS.map(
@@ -172,14 +187,24 @@ ${jsonLd}
     const body = `<section class="hero"><h1>Millerenos</h1>
       <p class="lead">${esc(COPY.en.pages.home.lead)}</p><p class="lead" lang="fa" dir="rtl">${esc(COPY.fa.pages.home.lead)}</p>
       <p><a class="btn" href="/en/" hreflang="en">English</a> <a class="btn" href="/fa/" hreflang="fa" lang="fa">فارسی</a></p></section>`;
-    const page = layout('en', null, '', { title: 'Millerenos — AI-powered commerce inside Telegram', description: COPY.en.pages.home.description }, body)
-      .replace('</head>', `<link rel="canonical" href="${base}/">${LOCALES.map((l) => `<link rel="alternate" hreflang="${l}" href="${url(l, '')}">`).join('')}<link rel="alternate" hreflang="x-default" href="${base}/"></head>`);
+    const page = layout(
+      'en',
+      null,
+      '',
+      { title: 'Millerenos — AI-powered commerce inside Telegram', description: COPY.en.pages.home.description },
+      body,
+    ).replace(
+      '</head>',
+      `<link rel="canonical" href="${base}/">${LOCALES.map((l) => `<link rel="alternate" hreflang="${l}" href="${url(l, '')}">`).join('')}<link rel="alternate" hreflang="x-default" href="${base}/"></head>`,
+    );
     return html(reply, page);
   });
 
   for (const locale of LOCALES) {
     for (const p of PAGES) {
-      app.get(`/${locale}/${p.path}`, async (_req, reply) => html(reply, await renderPage(locale, p.id, p.path), 200, p.id === 'status' ? 'no-store' : 'public, max-age=300'));
+      app.get(`/${locale}/${p.path}`, async (_req, reply) =>
+        html(reply, await renderPage(locale, p.id, p.path), 200, p.id === 'status' ? 'no-store' : 'public, max-age=300'),
+      );
     }
     app.get(`/${locale}`, async (_req, reply) => reply.redirect(`/${locale}/`, 301));
   }
@@ -188,12 +213,16 @@ ${jsonLd}
     reply.header('content-type', 'text/css; charset=utf-8').header('cache-control', 'public, max-age=31536000, immutable').send(SITE_CSS),
   );
   const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#0f766e"/><path d="M8 23V9l8 8 8-8v14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  app.get('/favicon.svg', async (_req, reply) => reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=604800').send(favicon));
+  app.get('/favicon.svg', async (_req, reply) =>
+    reply.header('content-type', 'image/svg+xml').header('cache-control', 'public, max-age=604800').send(favicon),
+  );
   app.get('/assets/og.svg', async (_req, reply) =>
     reply
       .header('content-type', 'image/svg+xml')
       .header('cache-control', 'public, max-age=604800')
-      .send(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#0b1320"/><rect x="100" y="215" width="200" height="200" rx="52" fill="#0f766e"/><path d="M150 365V265l50 50 50-50v100" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><text x="350" y="345" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="96" font-weight="700">Millerenos</text></svg>`),
+      .send(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#0b1320"/><rect x="100" y="215" width="200" height="200" rx="52" fill="#0f766e"/><path d="M150 365V265l50 50 50-50v100" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><text x="350" y="345" fill="#e6edf6" font-family="system-ui,sans-serif" font-size="96" font-weight="700">Millerenos</text></svg>`,
+      ),
   );
 
   app.get('/robots.txt', async (_req, reply) =>
@@ -245,6 +274,11 @@ ${jsonLd}
     const locale: Locale = isLocale(seg) ? seg : 'en';
     const c = COPY[locale];
     const body = `<section class="hero"><h1>${esc(c.notFoundTitle)}</h1><p class="lead">${esc(c.notFoundText)}</p><p><a class="btn" href="/${locale}/">${esc(c.breadcrumbHome)}</a></p></section>`;
-    return html(reply, layout(locale, null, '', { title: `${c.notFoundTitle} — Millerenos`, description: c.notFoundText, noindex: true }, body), GONE.has(path) ? 410 : 404, 'no-store');
+    return html(
+      reply,
+      layout(locale, null, '', { title: `${c.notFoundTitle} — Millerenos`, description: c.notFoundText, noindex: true }, body),
+      GONE.has(path) ? 410 : 404,
+      'no-store',
+    );
   };
 }

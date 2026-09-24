@@ -19,8 +19,7 @@ export const en = {
     '✅ Your free trial is active for <b>{minutes}</b>.\n\nNext step: open Millerenos, add your first product and share your store link.',
   'bot.trial_already_used': 'You have already used your free trial. Choose a plan to continue — your data is safe.',
   'bot.trial_active': '⏳ Trial active — {left} left.',
-  'bot.trial_expired':
-    '⌛ Your free trial has ended. Your store and data are kept safely.\nChoose a plan to keep selling.',
+  'bot.trial_expired': '⌛ Your free trial has ended. Your store and data are kept safely.\nChoose a plan to keep selling.',
   'bot.subscribed': '💎 Plan <b>{plan}</b> active until {date}.',
   'bot.no_workspace': 'You don’t have a business yet. Start your free trial to create one in seconds.',
   'bot.business_summary': '🏪 <b>{name}</b>\n{status}\n\nProducts: {products} · Orders: {orders}\nOnboarding: {done}/{total} steps',
@@ -32,8 +31,7 @@ export const en = {
   'bot.payment_review':
     'We received your payment but could not apply it automatically. Our team has been notified and will resolve it shortly. Reference: {ref}',
   'bot.precheckout_failed': 'This invoice is no longer valid. Please start checkout again.',
-  'bot.support_intro':
-    '🛟 <b>Support</b>\nOpen Millerenos → Support to create a ticket. You will get a reference number and updates here.',
+  'bot.support_intro': '🛟 <b>Support</b>\nOpen Millerenos → Support to create a ticket. You will get a reference number and updates here.',
   'bot.settings_intro': '⚙️ <b>Settings</b>\nChoose an option:',
   'bot.language_set': '✅ Language updated.',
   'bot.ai_intro':

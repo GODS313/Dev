@@ -17,7 +17,11 @@ export async function createTicket(
       [reference, input.userId, input.workspaceId ?? null, input.category, input.subject],
     );
     if (res.rows[0]) {
-      await q.query('INSERT INTO support_messages (ticket_id, author_user_id, body) VALUES ($1, $2, $3)', [res.rows[0].id, input.userId, input.body]);
+      await q.query('INSERT INTO support_messages (ticket_id, author_user_id, body) VALUES ($1, $2, $3)', [
+        res.rows[0].id,
+        input.userId,
+        input.body,
+      ]);
       await track(q, 'support_ticket_created', { userId: input.userId, props: { category: input.category } });
       return res.rows[0];
     }
@@ -54,6 +58,9 @@ export async function addTicketMessage(q: Queryable, id: string, viewer: { userI
     body,
   ]);
   await q.query(`UPDATE support_tickets SET status = $2 WHERE id = $1 AND status <> 'closed'`, [id, viewer.asStaff ? 'pending' : 'open']);
-  const owner = await q.query('SELECT u.telegram_user_id::text AS tg, t.reference FROM support_tickets t JOIN users u ON u.id = t.user_id WHERE t.id = $1', [id]);
+  const owner = await q.query(
+    'SELECT u.telegram_user_id::text AS tg, t.reference FROM support_tickets t JOIN users u ON u.id = t.user_id WHERE t.id = $1',
+    [id],
+  );
   return owner.rows[0] as { tg: string | null; reference: string };
 }

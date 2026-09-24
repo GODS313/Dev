@@ -18,8 +18,18 @@ export interface PaymentProviderInfo {
 }
 
 export const PAYMENT_PROVIDERS: PaymentProviderInfo[] = [
-  { id: 'telegram_stars', status: 'OFFICIAL_SUPPORTED', usedFor: 'Millerenos subscriptions (digital service inside Telegram)', storesCardData: false },
-  { id: 'manual_transfer', status: 'LIMITED_SUPPORTED', usedFor: 'Merchant orders confirmed manually by the merchant', storesCardData: false },
+  {
+    id: 'telegram_stars',
+    status: 'OFFICIAL_SUPPORTED',
+    usedFor: 'Millerenos subscriptions (digital service inside Telegram)',
+    storesCardData: false,
+  },
+  {
+    id: 'manual_transfer',
+    status: 'LIMITED_SUPPORTED',
+    usedFor: 'Merchant orders confirmed manually by the merchant',
+    storesCardData: false,
+  },
 ];
 
 export function selectProvider(ctx: { purpose: 'subscription' | 'order'; channel: 'telegram' | 'web' }): PaymentProviderId {

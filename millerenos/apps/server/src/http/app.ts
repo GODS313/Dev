@@ -39,7 +39,12 @@ export const metrics = (() => {
       buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
       registers: [registry],
     }),
-    telegramUpdates: new client.Counter({ name: 'telegram_updates_total', help: 'Telegram updates', labelNames: ['result'], registers: [registry] }),
+    telegramUpdates: new client.Counter({
+      name: 'telegram_updates_total',
+      help: 'Telegram updates',
+      labelNames: ['result'],
+      registers: [registry],
+    }),
   };
 })();
 
@@ -48,7 +53,6 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
     loggerInstance: s.log as unknown as FastifyBaseLogger,
     trustProxy: s.cfg.TRUST_PROXY,
     bodyLimit: 256 * 1024,
-    disableRequestLogging: false,
     genReqId: (req) => {
       const given = req.headers['x-request-id'];
       return typeof given === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(given) ? given : randomUUID();
@@ -93,7 +97,10 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
     const start = (req as unknown as { _t?: bigint })._t;
     if (!start) return;
     const route = req.routeOptions.url ?? 'unmatched';
-    metrics.httpDuration.observe({ method: req.method, route, status: String(reply.statusCode) }, Number(process.hrtime.bigint() - start) / 1e9);
+    metrics.httpDuration.observe(
+      { method: req.method, route, status: String(reply.statusCode) },
+      Number(process.hrtime.bigint() - start) / 1e9,
+    );
   });
 
   app.setErrorHandler((err: FastifyError | AppError, req, reply) => {
@@ -105,7 +112,9 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
     const fe = err as FastifyError;
     if (fe.statusCode && fe.statusCode < 500) {
       const code = fe.statusCode === 413 ? 'bad_request' : fe.statusCode === 429 ? 'rate_limited' : 'bad_request';
-      return reply.code(fe.statusCode).send({ error: { code, message: fe.statusCode === 413 ? 'Payload too large' : 'Bad request', requestId: req.id } });
+      return reply
+        .code(fe.statusCode)
+        .send({ error: { code, message: fe.statusCode === 413 ? 'Payload too large' : 'Bad request', requestId: req.id } });
     }
     req.log.error({ err: { message: scrubSecrets(String(err.message)), stack: scrubSecrets(String(err.stack ?? '')) } }, 'unhandled error');
     return reply.code(500).send({ error: { code: 'internal', message: 'Something went wrong', requestId: req.id } });
@@ -124,7 +133,8 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
   app.get('/metrics', { config: { rateLimit: false } }, async (req, reply) => {
     const token = s.cfg.METRICS_TOKEN;
     const given = req.headers.authorization?.replace(/^Bearer /, '') ?? '';
-    if (!token || !safeEqual(given, token)) return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
+    if (!token || !safeEqual(given, token))
+      return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
     return reply.header('content-type', metrics.registry.contentType).send(await metrics.registry.metrics());
   });
 
@@ -167,7 +177,7 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
       prefix: '/app/',
       index: 'index.html',
       setHeaders: (res, filePath) => {
-        res.setHeader('cache-control', filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable');
+        res.header('cache-control', filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable');
       },
     });
   } else {

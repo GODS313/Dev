@@ -7,12 +7,37 @@ describe('telegram bot journey', () => {
   const from = { id: 5001, is_bot: false, first_name: 'Sara', language_code: 'fa' };
   const chat = { id: 5001, type: 'private', first_name: 'Sara' };
   const send = (body: Record<string, unknown>) =>
-    h.app.inject({ method: 'POST', url: '/tg/webhook', headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET }, payload: update(body) });
-  const text = (t: string) => ({ message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat, from, text: t, entities: t.startsWith('/') ? [{ type: 'bot_command', offset: 0, length: t.split(' ')[0]!.length }] : [] } });
-  const tap = (data: string) => ({ callback_query: { id: `cb${Math.random()}`, from, chat_instance: '1', data, message: { message_id: 2, date: 0, chat, from: { id: 1, is_bot: true, first_name: 'b' }, text: 'x' } } });
+    h.app.inject({
+      method: 'POST',
+      url: '/tg/webhook',
+      headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+      payload: update(body),
+    });
+  const text = (t: string) => ({
+    message: {
+      message_id: 1,
+      date: Math.floor(Date.now() / 1000),
+      chat,
+      from,
+      text: t,
+      entities: t.startsWith('/') ? [{ type: 'bot_command', offset: 0, length: t.split(' ')[0]!.length }] : [],
+    },
+  });
+  const tap = (data: string) => ({
+    callback_query: {
+      id: `cb${Math.random()}`,
+      from,
+      chat_instance: '1',
+      data,
+      message: { message_id: 2, date: 0, chat, from: { id: 1, is_bot: true, first_name: 'b' }, text: 'x' },
+    },
+  });
   const last = (method: string) => [...h.calls].reverse().find((c) => c.method === method)!;
   const buttons = (call: { payload: Record<string, unknown> }) =>
-    ((call.payload.reply_markup as { inline_keyboard: { text: string; callback_data?: string; web_app?: { url: string } }[][] }).inline_keyboard ?? []).flat();
+    (
+      (call.payload.reply_markup as { inline_keyboard: { text: string; callback_data?: string; web_app?: { url: string } }[][] })
+        .inline_keyboard ?? []
+    ).flat();
 
   before(async () => {
     h = await makeHarness('bot');
@@ -23,7 +48,10 @@ describe('telegram bot journey', () => {
     await send(text('/start src_instagram'));
     const msg = last('sendMessage');
     assert.match(String(msg.payload.text), /زبان/);
-    assert.deepEqual(buttons(msg).map((b) => b.callback_data), ['lang:en', 'lang:fa']);
+    assert.deepEqual(
+      buttons(msg).map((b) => b.callback_data),
+      ['lang:en', 'lang:fa'],
+    );
     const ev = await h.db.system.query(`SELECT props FROM analytics_events WHERE name = 'bot_started'`);
     assert.equal(ev.rows[0].props.source, 'instagram');
   });

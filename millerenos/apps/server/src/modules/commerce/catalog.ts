@@ -85,7 +85,15 @@ export async function updateProduct(q: Queryable, workspaceId: string, id: strin
           stock = CASE WHEN $4::boolean THEN $5::int ELSE stock END,
           sku = CASE WHEN $6::boolean THEN $7 ELSE sku END
         WHERE workspace_id = $1 AND product_id = $2`,
-      [workspaceId, id, input.priceMinor ?? null, input.stock !== undefined, input.stock ?? null, input.sku !== undefined, input.sku ?? null],
+      [
+        workspaceId,
+        id,
+        input.priceMinor ?? null,
+        input.stock !== undefined,
+        input.stock ?? null,
+        input.sku !== undefined,
+        input.sku ?? null,
+      ],
     );
   }
   return getProduct(q, workspaceId, id);

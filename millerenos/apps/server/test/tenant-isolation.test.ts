@@ -54,7 +54,12 @@ describe('tenant isolation', () => {
   });
 
   it('B cannot attach A’s category to B’s product', async () => {
-    const cat = await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${a.workspaceId}/categories`, headers: a.auth, payload: { name: 'A-cat' } });
+    const cat = await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${a.workspaceId}/categories`,
+      headers: a.auth,
+      payload: { name: 'A-cat' },
+    });
     const res = await h.app.inject({
       method: 'POST',
       url: `/api/v1/workspaces/${b.workspaceId}/products`,
@@ -135,7 +140,12 @@ describe('tenant isolation', () => {
     assert.match(t.json().reference, /^MLR-[A-Z0-9]{6}$/);
     const other = await h.app.inject({ method: 'GET', url: `/api/v1/support/tickets/${t.json().id}`, headers: b.auth });
     assert.equal(other.statusCode, 404);
-    const reply = await h.app.inject({ method: 'POST', url: `/api/v1/support/tickets/${t.json().id}/messages`, headers: b.auth, payload: { body: 'hi' } });
+    const reply = await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/support/tickets/${t.json().id}/messages`,
+      headers: b.auth,
+      payload: { body: 'hi' },
+    });
     assert.equal(reply.statusCode, 404);
   });
 });

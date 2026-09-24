@@ -21,12 +21,7 @@ export interface ValidatedInitData {
  * (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app).
  * Client-provided identity is never trusted without this check.
  */
-export function validateInitData(
-  initData: string,
-  botToken: string,
-  maxAgeSeconds: number,
-  now: Date = new Date(),
-): ValidatedInitData {
+export function validateInitData(initData: string, botToken: string, maxAgeSeconds: number, now: Date = new Date()): ValidatedInitData {
   if (typeof initData !== 'string' || initData.length === 0 || initData.length > 4096) {
     throw new AppError('unauthorized', 'Invalid init data');
   }

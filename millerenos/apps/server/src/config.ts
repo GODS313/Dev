@@ -1,8 +1,6 @@
 import { z } from 'zod';
 
-const bool = z
-  .enum(['true', 'false', '1', '0'])
-  .transform((v) => v === 'true' || v === '1');
+const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
@@ -18,8 +16,14 @@ const schema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
 
   TELEGRAM_BOT_TOKEN: z.string().optional(),
-  TELEGRAM_BOT_USERNAME: z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional(),
-  TELEGRAM_WEBHOOK_SECRET: z.string().regex(/^[A-Za-z0-9_-]{32,256}$/).optional(),
+  TELEGRAM_BOT_USERNAME: z
+    .string()
+    .regex(/^[A-Za-z0-9_]{5,32}$/)
+    .optional(),
+  TELEGRAM_WEBHOOK_SECRET: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{32,256}$/)
+    .optional(),
   // Comma-separated numeric Telegram IDs that are promoted to superadmin on first contact.
   PLATFORM_ADMIN_TELEGRAM_IDS: z
     .string()
@@ -35,10 +39,20 @@ const schema = z.object({
         }),
     ),
 
-  SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(24),
+  SESSION_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24),
   INIT_DATA_MAX_AGE_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
 
-  TRIAL_DURATION_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(60),
+  TRIAL_DURATION_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(24 * 60)
+    .default(60),
   TRIAL_AI_REQUESTS: z.coerce.number().int().min(0).max(1000).default(20),
   TRIAL_MAX_PRODUCTS: z.coerce.number().int().min(1).max(1000).default(25),
   TRIAL_MAX_ORDERS: z.coerce.number().int().min(1).max(10000).default(50),

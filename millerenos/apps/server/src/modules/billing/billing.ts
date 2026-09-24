@@ -64,7 +64,10 @@ export async function createSubscriptionCheckout(
     label: title,
   });
   await db.tenant(input.workspaceId, (q) =>
-    q.query(`INSERT INTO payment_attempts (workspace_id, invoice_id, stage) VALUES ($1, $2, 'invoice_sent')`, [input.workspaceId, invoice.id]),
+    q.query(`INSERT INTO payment_attempts (workspace_id, invoice_id, stage) VALUES ($1, $2, 'invoice_sent')`, [
+      input.workspaceId,
+      invoice.id,
+    ]),
   );
   return { invoiceId: invoice.id as string, link };
 }
@@ -173,9 +176,10 @@ export async function recordSuccessfulPayment(
     const plan = await q.query('SELECT period_days FROM plans WHERE code = $1', [inv.plan_code]);
     const days = plan.rows[0].period_days as number;
     // expire lapsed subscriptions, then extend the current one or start a new period
-    await q.query(`UPDATE subscriptions SET status = 'expired' WHERE workspace_id = $1 AND status = 'active' AND current_period_end <= now()`, [
-      inv.workspace_id,
-    ]);
+    await q.query(
+      `UPDATE subscriptions SET status = 'expired' WHERE workspace_id = $1 AND status = 'active' AND current_period_end <= now()`,
+      [inv.workspace_id],
+    );
     const cur = await q.query(`SELECT id FROM subscriptions WHERE workspace_id = $1 AND status = 'active' FOR UPDATE`, [inv.workspace_id]);
     let periodEnd: Date;
     const renewed = Boolean(cur.rows[0]);
@@ -199,7 +203,10 @@ export async function recordSuccessfulPayment(
     ]);
     await q.query('UPDATE webhook_events SET processed_at = now() WHERE id = $1', [ev.rows[0].id]);
     await track(q, 'payment_completed', { workspaceId: inv.workspace_id, props: { plan: inv.plan_code, provider: 'telegram_stars' } });
-    await track(q, renewed ? 'subscription_renewed' : 'subscription_started', { workspaceId: inv.workspace_id, props: { plan: inv.plan_code } });
+    await track(q, renewed ? 'subscription_renewed' : 'subscription_started', {
+      workspaceId: inv.workspace_id,
+      props: { plan: inv.plan_code },
+    });
     return { kind: 'activated' as const, workspaceId: inv.workspace_id, planCode: inv.plan_code, periodEnd, renewed };
   });
 }
@@ -234,9 +241,19 @@ export async function refundPayment(db: Db, gateway: TelegramGateway, paymentId:
     );
     await q.query(`UPDATE payments SET status = 'refunded' WHERE id = $1`, [pay.id]);
     await q.query(`UPDATE invoices SET status = 'refunded' WHERE id = $1`, [pay.invoice_id]);
-    await q.query(`UPDATE subscriptions SET status = 'cancelled', current_period_end = greatest(current_period_start + interval '1 second', now())
-                    WHERE workspace_id = $1 AND status = 'active'`, [pay.workspace_id]);
-    await audit(q, { action: 'payment.refunded', actorUserId, workspaceId: pay.workspace_id, targetType: 'payment', targetId: pay.id, metadata: { reason } });
+    await q.query(
+      `UPDATE subscriptions SET status = 'cancelled', current_period_end = greatest(current_period_start + interval '1 second', now())
+                    WHERE workspace_id = $1 AND status = 'active'`,
+      [pay.workspace_id],
+    );
+    await audit(q, {
+      action: 'payment.refunded',
+      actorUserId,
+      workspaceId: pay.workspace_id,
+      targetType: 'payment',
+      targetId: pay.id,
+      metadata: { reason },
+    });
     await track(q, 'subscription_cancelled', { workspaceId: pay.workspace_id, props: { cause: 'refund' } });
   });
 }

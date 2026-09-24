@@ -24,11 +24,7 @@ export function guessLocale(languageCode?: string): 'en' | 'fa' {
  * Creates or refreshes a user from a verified Telegram identity.
  * Returns isNew so callers can emit bot_started / attribute referrals exactly once.
  */
-export async function upsertTelegramUser(
-  q: Queryable,
-  tg: TelegramUser,
-  adminIds: bigint[],
-): Promise<{ user: UserRow; isNew: boolean }> {
+export async function upsertTelegramUser(q: Queryable, tg: TelegramUser, adminIds: bigint[]): Promise<{ user: UserRow; isNew: boolean }> {
   const firstName = (tg.first_name ?? '').slice(0, 128);
   const username = tg.username ? tg.username.slice(0, 64) : null;
   const isAdmin = adminIds.includes(BigInt(tg.id));

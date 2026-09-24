@@ -60,8 +60,6 @@ export async function requeueStale(q: Queryable, olderThanMinutes = 10) {
 }
 
 export async function jobStats(q: Queryable) {
-  const res = await q.query(
-    `SELECT status, count(*)::int AS n FROM jobs WHERE created_at > now() - interval '7 days' GROUP BY status`,
-  );
+  const res = await q.query(`SELECT status, count(*)::int AS n FROM jobs WHERE created_at > now() - interval '7 days' GROUP BY status`);
   return Object.fromEntries(res.rows.map((r) => [r.status, r.n])) as Record<string, number>;
 }

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { existsSync } from 'node:fs';
+import { DEFAULT_MINIAPP_DIR, buildApp } from '../src/http/app.js';
 import { makeHarness } from './helpers.js';
 
 describe('public website SEO & security headers', () => {
@@ -99,4 +101,24 @@ describe('public website SEO & security headers', () => {
     assert.match(res.body, /^Contact: /m);
     assert.match(res.body, /^Expires: /m);
   });
+
+  it(
+    'serves the Mini App with Telegram-only framing, noindex and cache rules; blocks traversal',
+    { skip: !existsSync(DEFAULT_MINIAPP_DIR) && 'mini app not built' },
+    async () => {
+      const app = await buildApp(h.services, { miniappDir: DEFAULT_MINIAPP_DIR });
+      const index = await app.inject({ method: 'GET', url: '/app/' });
+      assert.equal(index.statusCode, 200);
+      assert.match(String(index.headers['content-security-policy']), /frame-ancestors https:\/\/web\.telegram\.org/);
+      assert.equal(index.headers['x-robots-tag'], 'noindex, nofollow');
+      assert.equal(index.headers['cache-control'], 'no-cache');
+      const asset = index.body.match(/\/app\/assets\/[^"]+\.js/)![0];
+      assert.match(String((await app.inject({ method: 'GET', url: asset })).headers['cache-control']), /immutable/);
+      for (const url of ['/app/../package.json', '/app/%2e%2e/%2e%2e/package.json', '/app/..%2f..%2fpackage.json']) {
+        const r = await app.inject({ method: 'GET', url });
+        assert.ok(!r.body.includes('"@millerenos/server"'), url);
+      }
+      await app.close();
+    },
+  );
 });

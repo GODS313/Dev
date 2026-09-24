@@ -1,0 +1,13 @@
+[Unit]
+Description=Millerenos encrypted database backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=millerenos-backup
+EnvironmentFile=/etc/millerenos/backup.env
+ExecStart=/opt/millerenos/ops/backup/backup.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/millerenos
+PrivateTmp=true

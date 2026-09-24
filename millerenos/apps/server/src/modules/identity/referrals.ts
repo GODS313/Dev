@@ -7,10 +7,10 @@ export async function ensureReferralCode(q: Queryable, userId: string): Promise<
   if (existing.rows[0]) return existing.rows[0].code;
   for (let i = 0; i < 5; i++) {
     const code = randomCode(8, 'abcdefghijkmnpqrstuvwxyz23456789');
-    const res = await q.query(
-      'INSERT INTO referral_codes (code, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING code',
-      [code, userId],
-    );
+    const res = await q.query('INSERT INTO referral_codes (code, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING code', [
+      code,
+      userId,
+    ]);
     if (res.rows[0]) {
       await track(q, 'referral_created', { userId });
       return code;

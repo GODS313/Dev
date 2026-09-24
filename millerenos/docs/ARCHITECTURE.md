@@ -6,7 +6,7 @@ Status: Phase 1 (MVP) foundation. Last reviewed: 2026-09-24.
 
 | Item | Finding | Consequence |
 |---|---|---|
-| Repository `GODS313/Dev` | Already hosts the **Hamkare / Adlisho** production project at the repo root (Cloudflare Pages output dir `/`, PHP panels, Python bots, VPS scripts). | Millerenos lives entirely in `millerenos/`. **No existing file was modified**, so no backup was needed. Root CI (`release-checks.yml`) is unaffected. |
+| Repository `GODS313/Dev` | Already hosts the **Hamkare / Adlisho** production project at the repo root (Cloudflare Pages output dir `/`, PHP panels, Python bots, VPS scripts). | Millerenos lives entirely in `millerenos/` plus one new workflow `.github/workflows/millerenos-ci.yml` (path-filtered). **No existing file was modified**, so no backup was needed. Root CI (`release-checks.yml`) is unaffected. |
 | Hosting of repo root | Cloudflare Pages publishes the repo root as static files. | Merged to `main`, the `millerenos/` sources could become publicly downloadable from the Hamkare site. See "IP exposure" in `SECURITY.md`. Recommended: move Millerenos into its own private repository before merging to `main`. |
 | Toolchain | Node 22, PostgreSQL 16, Docker, gpg, age available in dev container. | TypeScript on Node 22 LTS, PostgreSQL 16. |
 | Credentials | None provided (no bot token, no Anthropic key, no server, no domain). | All integrations run in "not configured" mode with clear status; nothing pretends to be live. |

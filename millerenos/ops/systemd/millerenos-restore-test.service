@@ -1,0 +1,10 @@
+[Unit]
+Description=Millerenos weekly restore test of the latest backup
+
+[Service]
+Type=oneshot
+User=millerenos-backup
+EnvironmentFile=/etc/millerenos/restore-test.env
+ExecStart=/opt/millerenos/ops/backup/restore-test.sh
+NoNewPrivileges=true
+PrivateTmp=true

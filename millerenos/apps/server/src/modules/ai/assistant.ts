@@ -28,7 +28,9 @@ export async function buildGroundingContext(q: Queryable, workspaceId: string, l
       WHERE p.workspace_id = $1 AND p.status = 'active' ORDER BY p.created_at DESC LIMIT 80`,
     [workspaceId],
   );
-  const faqs = await q.query('SELECT question, answer FROM faq_entries WHERE workspace_id = $1 ORDER BY created_at LIMIT 50', [workspaceId]);
+  const faqs = await q.query('SELECT question, answer FROM faq_entries WHERE workspace_id = $1 ORDER BY created_at LIMIT 50', [
+    workspaceId,
+  ]);
   const catalog = products.rows
     .map(
       (p) =>

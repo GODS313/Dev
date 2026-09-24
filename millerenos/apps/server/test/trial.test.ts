@@ -25,7 +25,12 @@ describe('one-hour trial', () => {
   it('enforces product quota during trial', async () => {
     const s = await loginWithTrial(h, 2002);
     const mk = () =>
-      h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${s.workspaceId}/products`, headers: s.auth, payload: { name: 'P', priceMinor: 100 } });
+      h.app.inject({
+        method: 'POST',
+        url: `/api/v1/workspaces/${s.workspaceId}/products`,
+        headers: s.auth,
+        payload: { name: 'P', priceMinor: 100 },
+      });
     assert.equal((await mk()).statusCode, 200);
     assert.equal((await mk()).statusCode, 200);
     const third = await mk();
@@ -35,12 +40,25 @@ describe('one-hour trial', () => {
 
   it('expiry blocks writes, keeps data readable and marks trial expired', async () => {
     const s = await loginWithTrial(h, 2003);
-    await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${s.workspaceId}/products`, headers: s.auth, payload: { name: 'Kept', priceMinor: 5 } });
-    await h.db.system.query(`UPDATE trials SET expires_at = now() - interval '1 second', started_at = now() - interval '1 hour' WHERE workspace_id = $1`, [s.workspaceId]);
+    await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${s.workspaceId}/products`,
+      headers: s.auth,
+      payload: { name: 'Kept', priceMinor: 5 },
+    });
+    await h.db.system.query(
+      `UPDATE trials SET expires_at = now() - interval '1 second', started_at = now() - interval '1 hour' WHERE workspace_id = $1`,
+      [s.workspaceId],
+    );
     const expired = await h.db.systemTx((q) => expireDueTrials(q));
     assert.ok(expired.some((t) => t.workspace_id === s.workspaceId));
 
-    const create = await h.app.inject({ method: 'POST', url: `/api/v1/workspaces/${s.workspaceId}/products`, headers: s.auth, payload: { name: 'New', priceMinor: 5 } });
+    const create = await h.app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${s.workspaceId}/products`,
+      headers: s.auth,
+      payload: { name: 'New', priceMinor: 5 },
+    });
     assert.equal(create.statusCode, 402);
     assert.equal(create.json().error.code, 'access_expired');
     const list = await h.app.inject({ method: 'GET', url: `/api/v1/workspaces/${s.workspaceId}/products`, headers: s.auth });
@@ -62,7 +80,7 @@ describe('one-hour trial', () => {
 
   it('a deleted and re-created Telegram account cannot farm a second trial', async () => {
     const s = await loginWithTrial(h, 2005);
-    const del = await h.app.inject({ method: "POST", url: "/api/v1/account/deletion", headers: s.auth });
+    const del = await h.app.inject({ method: 'POST', url: '/api/v1/account/deletion', headers: s.auth });
     assert.equal(del.statusCode, 200, del.body);
     await h.db.system.query(`UPDATE account_deletion_requests SET execute_after = now() WHERE user_id = $1`, [s.user.id]);
     assert.equal(await h.db.systemTx((q) => processDueDeletions(q)), 1);
@@ -75,7 +93,9 @@ describe('one-hour trial', () => {
   it('blocked users cannot start trials', async () => {
     const s = await login(h, 2006);
     await h.db.system.query('UPDATE users SET is_blocked = true WHERE id = $1', [s.user.id]);
-    const user = (await h.db.app.query(`SELECT id, first_name, locale, is_blocked, telegram_user_id::text FROM users WHERE id = $1`, [s.user.id])).rows[0];
+    const user = (
+      await h.db.app.query(`SELECT id, first_name, locale, is_blocked, telegram_user_id::text FROM users WHERE id = $1`, [s.user.id])
+    ).rows[0];
     await assert.rejects(startTrial(h.db, h.cfg, user), /blocked/);
   });
 
