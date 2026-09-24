@@ -8,8 +8,12 @@ final class Kernel
 {
     public const REDIRECTS = ['/en/home' => '/en/', '/fa/home' => '/fa/', '/en' => '/en/', '/fa' => '/fa/'];
 
-    public function __construct(private App $app, private string $publicDir)
+    /** @var callable(string): TelegramApi */
+    private $tgFactory;
+
+    public function __construct(private App $app, private string $publicDir, private string $root = '', ?callable $tgFactory = null)
     {
+        $this->tgFactory = $tgFactory ?? fn(string $t) => new HttpTelegramApi($t);
     }
 
     public function handle(Request $r): array
@@ -52,6 +56,7 @@ final class Kernel
                 }
                 return $json(200, ['ok' => true] + $out);
             }
+            if ($p === '/setup/bot' && $r->method === 'POST') return $json(200, $this->setupBot($r));
             if (str_starts_with($p, '/api/')) {
                 [$status, $body] = (new Api($this->app))->handle($r);
                 $this->opportunisticCron();
@@ -69,6 +74,43 @@ final class Kernel
             error_log(scrub("[{$rid}] " . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()));
             return $json(500, ['error' => ['code' => 'internal', 'message' => 'Something went wrong', 'requestId' => $rid]]);
         }
+    }
+
+    /**
+     * Connects (or rotates) the bot token without redeploying. Only a token whose getMe username equals the
+     * configured TELEGRAM_BOT_USERNAME is accepted — possessing that bot's token is the proof of ownership.
+     */
+    private function setupBot(Request $r): array
+    {
+        $this->app->rateLimit('setup:' . $r->ip, 5, 600);
+        $expected = strtolower((string) $this->app->cfg->botUsername);
+        if ($expected === '' || $this->root === '') throw new AppError('not_configured', 'Bot username is not configured');
+        $token = V::str($r->json(), 'token', 100, 20);
+        if (!preg_match('/^\d{6,12}:[A-Za-z0-9_-]{30,}$/', (string) $token)) throw new AppError('validation_failed', 'Invalid token format');
+        $tg = ($this->tgFactory)($token);
+        try {
+            $me = $tg->call('getMe');
+        } catch (\Throwable) {
+            throw new AppError('unauthorized', 'Token rejected by Telegram');
+        }
+        if (strtolower((string) ($me['username'] ?? '')) !== $expected) throw new AppError('forbidden', 'Token belongs to a different bot');
+        $file = $this->root . '/data/bot.php';
+        file_put_contents($file, '<?php return ' . var_export(['token' => $token, 'set_at' => now()], true) . ';', LOCK_EX);
+        @chmod($file, 0600);
+        $this->app->audit('bot.token_connected', null, null, 'bot', (string) $me['username']);
+        $this->app->cfg->botToken = $token;
+        $app = new App($this->app->db, $this->app->cfg, $tg);
+        return ['ok' => true, 'bot' => $me['username']] + $app->ensureWebhook() + ['commands' => $this->setCommands($tg)];
+    }
+
+    private function setCommands(TelegramApi $tg): string
+    {
+        $en = [['start', 'Main menu'], ['app', 'Open Millerenos'], ['plans', 'Plans & pricing'], ['support', 'Support'], ['language', 'Change language'], ['privacy', 'Privacy policy']];
+        $fa = [['start', 'منوی اصلی'], ['app', 'باز کردن Millerenos'], ['plans', 'پلن‌ها و قیمت'], ['support', 'پشتیبانی'], ['language', 'تغییر زبان'], ['privacy', 'حریم خصوصی']];
+        $map = fn(array $l) => array_map(fn($c) => ['command' => $c[0], 'description' => $c[1]], $l);
+        $tg->call('setMyCommands', ['commands' => $map($en)]);
+        $tg->call('setMyCommands', ['commands' => $map($fa), 'language_code' => 'fa']);
+        return 'ok';
     }
 
     private function opportunisticCron(): void

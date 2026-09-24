@@ -53,7 +53,24 @@ function harness(array $env = []): array
     @mkdir($public . '/en', 0700, true);
     file_put_contents($public . '/404.html', '<h1>Not found</h1>');
     file_put_contents($public . '/en/status.html', '<span class="badge ok">All systems operational</span>');
-    return [$app, $tg, new Kernel($app, $public)];
+    $factory = function (string $token) {
+        $f = new class ($token) implements TelegramApi {
+            public array $calls = [];
+            public function __construct(private string $t) {}
+            public function call(string $method, array $params = []): mixed
+            {
+                $this->calls[] = [$method, $params];
+                if ($method === 'getMe') {
+                    if (str_starts_with($this->t, '000')) throw new \RuntimeException('Unauthorized');
+                    return ['username' => str_starts_with($this->t, '111') ? 'other_bot' : 'mlr_test_bot'];
+                }
+                return $method === 'getWebhookInfo' ? ['url' => ''] : true;
+            }
+        };
+        $GLOBALS['lastFactoryTg'] = $f;
+        return $f;
+    };
+    return [$app, $tg, new Kernel($app, $public, $root, $factory), $root];
 }
 
 function req(Kernel $k, string $method, string $path, mixed $body = null, ?string $token = null, array $headers = [], array $query = []): array
@@ -247,6 +264,34 @@ suite('cron, health, 404', function () {
     check(req($k, 'GET', '/en/home')['headers']['Location'] === '/God/en/', 'redirect keeps base path');
     check(str_contains(req($k, 'GET', '/en/status')['body'], 'operational'), 'status page');
     check(req($k, 'POST', '/api/v1/workspaces/00000000-0000-4000-8000-000000000000/ai/reply-suggestion', [], login($k, 77)['token'])['status'] === 404, 'ai route needs membership');
+});
+
+suite('bot connect (setup) endpoint', function () {
+    [$app, , , $root] = harness(['TELEGRAM_BOT_TOKEN' => '']);
+    $k = new Kernel($app, sys_get_temp_dir(), $root, fn(string $t) => (function () use ($t) {
+        return new class ($t) implements TelegramApi {
+            public function __construct(private string $t) {}
+            public function call(string $method, array $params = []): mixed
+            {
+                if ($method === 'getMe') {
+                    if (str_starts_with($this->t, '000')) throw new \RuntimeException('Unauthorized');
+                    return ['username' => str_starts_with($this->t, '111') ? 'other_bot' : 'MLR_Test_Bot'];
+                }
+                return $method === 'getWebhookInfo' ? ['url' => ''] : true;
+            }
+        };
+    })());
+    check($app->cfg->botToken === null, 'starts without token');
+    check(req($k, 'POST', '/setup/bot', ['token' => 'nonsense-token-value-123'])['status'] === 422, 'bad format rejected');
+    check(req($k, 'POST', '/setup/bot', ['token' => '000000000:' . str_repeat('a', 35)])['status'] === 401, 'token rejected by telegram');
+    check(req($k, 'POST', '/setup/bot', ['token' => '111111111:' . str_repeat('a', 35)])['status'] === 403, 'other bot rejected');
+    check(!is_file($root . '/data/bot.php'), 'nothing stored on rejection');
+    $ok = req($k, 'POST', '/setup/bot', ['token' => '222222222:' . str_repeat('b', 35)]);
+    check($ok['status'] === 200 && $ok['json']['webhook'] === 'registered', 'correct bot connected + webhook');
+    check(is_file($root . '/data/bot.php') && (fileperms($root . '/data/bot.php') & 0077) === 0, 'token stored privately');
+    check(Config::load($root)->botToken === '222222222:' . str_repeat('b', 35), 'token loaded on next request');
+    for ($i = 0; $i < 3; $i++) req($k, 'POST', '/setup/bot', ['token' => 'x']);
+    check(req($k, 'POST', '/setup/bot', ['token' => 'x'])['status'] === 429, 'setup rate limited');
 });
 
 echo "\n# pass {$pass}\n# fail {$fail}\n";

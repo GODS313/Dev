@@ -109,16 +109,21 @@ jobs:
       - name: Install lftp
         if: steps.s.outputs.ready == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
-      - name: Write server config (only when the bot token secret exists)
-        if: steps.s.outputs.ready == 'true' && env.BOT_TOKEN != ''
+      - name: Write server config
+        if: steps.s.outputs.ready == 'true'
         run: |
           set -eu
           umask 077
           mkdir -p upload/millerenos/config
+          name=MilionersStory_BoT
+          if [ -n "$BOT_TOKEN" ]; then
+            name=$(curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["username"])')
+          fi
           {
             echo "PUBLIC_BASE_URL=$PUBLIC_BASE_URL"
-            echo "TELEGRAM_BOT_TOKEN=$BOT_TOKEN"
-            echo "TELEGRAM_BOT_USERNAME=$(curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["username"])')"
+            # expected bot: POST /setup/bot only accepts a token whose getMe username matches this
+            echo "TELEGRAM_BOT_USERNAME=$name"
+            if [ -n "$BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN=$BOT_TOKEN"; fi
             echo "PLATFORM_ADMIN_TELEGRAM_IDS=$ADMIN_IDS"
             echo "SECURITY_CONTACT=$SECURITY_CONTACT"
           } > upload/millerenos/config/app.env

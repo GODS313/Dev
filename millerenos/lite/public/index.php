@@ -26,7 +26,7 @@ $headers['content-type'] = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
 
 $body = (string) file_get_contents('php://input', false, null, 0, 256 * 1024);
 $req = new Mlr\Request($_SERVER['REQUEST_METHOD'] ?? 'GET', $path, $_GET, $headers, $body, (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
-[$status, $h, $out] = (new Mlr\Kernel($app, __DIR__))->handle($req);
+[$status, $h, $out] = (new Mlr\Kernel($app, __DIR__, $root))->handle($req);
 http_response_code($status);
 foreach ($h as $k => $v) header("{$k}: {$v}");
 echo $out;

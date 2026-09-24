@@ -64,6 +64,9 @@ final class Config
         $secrets = require $secretsFile;
         $baseUrl = rtrim($env['PUBLIC_BASE_URL'] ?? 'https://etebarami.net/God', '/');
         $token = ($env['TELEGRAM_BOT_TOKEN'] ?? '') !== '' ? $env['TELEGRAM_BOT_TOKEN'] : null;
+        // Token connected at runtime via POST /setup/bot (stored with the data, never in the web root).
+        $botFile = $root . '/data/bot.php';
+        if ($token === null && is_file($botFile)) $token = (require $botFile)['token'] ?? null;
         return new self(
             $baseUrl,
             rtrim((string) parse_url($baseUrl, PHP_URL_PATH), '/'),
