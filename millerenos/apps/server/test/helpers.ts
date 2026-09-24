@@ -98,7 +98,7 @@ export function captureBotApi(services: Services & { bot?: { api: { config: { us
 export async function makeHarness(name: string, overrides: Record<string, string> = {}) {
   const pg = await setupDatabase(name);
   const cfg = testConfig(pg, overrides);
-  const services = await createServices(cfg, createLogger('fatal'), { botInfo: BOT_INFO });
+  const services = await createServices(cfg, createLogger(cfg.LOG_LEVEL), { botInfo: BOT_INFO });
   const calls = captureBotApi(services as never);
   const app = await buildApp(services, { miniappDir: '/nonexistent' });
   await app.ready();

@@ -33,7 +33,7 @@ Each environment has its own database, secrets, bot token and webhook secret. Ne
 9. Enable backups (BACKUP_RESTORE.md) and run one restore test before inviting customers.
 
 ## Release procedure (every deploy)
-1. CI green on the commit (lint, format, typecheck, build, 68 tests, audit, license check, Docker build).
+1. CI green on the commit (lint, format, typecheck, build, 80 tests, audit, license check, Docker build).
 2. Deploy to **staging** first; smoke test: bot `/start`, Mini App sign-in, create product, place store order, Stars checkout (Telegram test environment).
 3. Production: take a backup (`systemctl start millerenos-backup`), then `docker compose … up -d --build`.
    `migrate` runs before the app starts; if it fails, the old containers keep running.
@@ -49,3 +49,20 @@ Each environment has its own database, secrets, bot token and webhook secret. Ne
 ## Scaling notes
 The app is stateless apart from the in-memory rate limiters. Before running more than one `app` replica, move rate
 limiting to Redis (`@fastify/rate-limit` supports it). Multiple `worker` replicas are already safe (`SKIP LOCKED`, dedupe keys).
+
+## etebarami.net/God (current target)
+The app supports being served under a path: set `PUBLIC_BASE_URL=https://etebarami.net/God` and every route, link,
+sitemap, cookie and the Mini App live under `/God`. The reverse proxy must forward `/God…` **without stripping**
+the prefix.
+
+1. On a server with Docker (ideally the one serving etebarami.net):
+   `git clone -b claude/millerenos-master-build-pbex95 https://github.com/GODS313/Dev.git /opt/millerenos-src`
+   `sudo bash /opt/millerenos-src/millerenos/ops/etebarami/install.sh` — asks for the bot token (hidden), optional
+   TRON address; generates all other secrets into `ops/.env` (mode 600); creates DB roles; starts db/migrate/app/worker.
+2. Add the proxy rule printed by the installer to the etebarami.net web server config.
+3. `sudo bash ops/etebarami/set-webhook.sh` (webhook with secret, commands, menu button → Mini App).
+4. @BotFather: `/setdomain` → `etebarami.net` (website login for crypto checkout).
+5. Enable backups (BACKUP_RESTORE.md).
+
+Shared cPanel hosting without Docker/PostgreSQL cannot run this stack; use a VPS (or give the app its own small VPS
+and proxy `/God` to it).

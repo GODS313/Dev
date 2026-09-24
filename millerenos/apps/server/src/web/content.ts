@@ -47,6 +47,9 @@ type Copy = {
   pricingPer: (days: number) => string;
   pricingLimits: (products: number, ai: number) => string;
   trialCard: { title: string; text: string };
+  cryptoPrice: (usdt: string, trx: string) => string;
+  cryptoCta: string;
+  cryptoNote: string;
   pages: Record<PageId, PageCopy>;
 };
 
@@ -62,6 +65,9 @@ const en: Copy = {
   notFoundText: 'The page you are looking for does not exist or has moved.',
   pricingPer: (d) => `per ${d} days, paid with Telegram Stars`,
   pricingLimits: (p, a) => `Up to ${p} products · ${a} AI requests per day`,
+  cryptoPrice: (usdt, trx) => `or ${usdt} USDT · ${trx} TRX (TRON network)`,
+  cryptoCta: 'Pay with USDT / TRX',
+  cryptoNote: 'Inside Telegram, plans are paid with Telegram Stars. USDT (TRC-20) and TRX payments are available on this website.',
   trialCard: { title: 'Free trial', text: 'One hour with real features: create your store, add products and try the AI assistant.' },
   pages: {
     home: {
@@ -363,6 +369,9 @@ const fa: Copy = {
   notFoundText: 'صفحه‌ای که دنبال آن هستید وجود ندارد یا جابه‌جا شده است.',
   pricingPer: (d) => `برای ${d.toLocaleString('fa-IR')} روز، پرداخت با Telegram Stars`,
   pricingLimits: (p, a) => `تا ${p.toLocaleString('fa-IR')} محصول · ${a.toLocaleString('fa-IR')} درخواست هوش مصنوعی در روز`,
+  cryptoPrice: (usdt, trx) => `یا ${usdt} تتر (USDT) · ${trx} ترون (TRX) در شبکه ترون`,
+  cryptoCta: 'پرداخت با تتر / ترون',
+  cryptoNote: 'داخل تلگرام پرداخت پلن‌ها با Telegram Stars است. پرداخت با تتر (TRC-20) و ترون از طریق همین وب‌سایت انجام می‌شود.',
   trialCard: { title: 'دوره رایگان', text: 'یک ساعت با امکانات واقعی: فروشگاه بسازید، محصول اضافه کنید و دستیار هوشمند را امتحان کنید.' },
   pages: {
     home: {

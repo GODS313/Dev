@@ -154,6 +154,32 @@ export async function adminRoutes(app: FastifyInstance, s: Services) {
     return { ok: true };
   });
 
+  app.patch('/api/admin/plans/:code', async (req) => {
+    const actor = await staff(req, ['superadmin']);
+    const { code } = parse(z.object({ code: z.string().regex(/^[a-z0-9_]{2,32}$/) }), req.params);
+    const body = parse(
+      z
+        .object({
+          price_stars: z.number().int().min(1).max(100000).optional(),
+          price_usdt_micro: z.number().int().min(1).max(1e12).optional(),
+          price_trx_sun: z.number().int().min(1).max(1e13).optional(),
+          is_active: z.boolean().optional(),
+        })
+        .strict(),
+      req.body,
+    );
+    await db.systemTx(async (q) => {
+      const r = await q.query(
+        `UPDATE plans SET price_stars = coalesce($2, price_stars), price_usdt_micro = coalesce($3, price_usdt_micro),
+                price_trx_sun = coalesce($4, price_trx_sun), is_active = coalesce($5, is_active) WHERE code = $1 RETURNING code`,
+        [code, body.price_stars ?? null, body.price_usdt_micro ?? null, body.price_trx_sun ?? null, body.is_active ?? null],
+      );
+      if (!r.rows[0]) throw new AppError('not_found', 'Plan not found');
+      await audit(q, { action: 'admin.plan_prices_changed', actorUserId: actor.id, targetType: 'plan', targetId: code, metadata: body });
+    });
+    return { ok: true };
+  });
+
   app.get('/api/admin/flags', async (req) => {
     await staff(req);
     return {

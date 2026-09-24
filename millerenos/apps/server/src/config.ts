@@ -65,10 +65,33 @@ const schema = z.object({
   // Secret for keyed hashes of identifiers (e.g. trial claims). Required in production.
   DATA_HASH_SECRET: z.string().min(32).default('dev-only-data-hash-secret-change-me-000'),
 
+  // TRON network payments (USDT TRC-20 / TRX). Receive-only address; the server never holds private keys.
+  TRON_RECEIVE_ADDRESS: z
+    .string()
+    .regex(/^T[1-9A-HJ-NP-Za-km-z]{33}$/)
+    .optional(),
+  TRON_API_BASE: z
+    .url()
+    .refine((u) => u.startsWith('https://'), 'must be https')
+    .default('https://api.trongrid.io'),
+  TRONGRID_API_KEY: z.string().optional(),
+  CRYPTO_INVOICE_TTL_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(24 * 60)
+    .default(120),
+  SECURITY_CONTACT: z.string().max(200).optional(),
+
   METRICS_TOKEN: z.string().min(16).optional(),
 });
 
 export type Config = z.infer<typeof schema>;
+
+/** Path prefix the app is served under, from PUBLIC_BASE_URL (e.g. https://example.com/God → "/God"). */
+export function basePath(cfg: Pick<Config, 'PUBLIC_BASE_URL'>): string {
+  return new URL(cfg.PUBLIC_BASE_URL).pathname.replace(/\/+$/, '');
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = schema.safeParse(env);
@@ -78,6 +101,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid configuration: ${issues}`);
   }
   const cfg = parsed.data;
+  const bp = basePath(cfg);
+  if (bp && !/^(\/[A-Za-z0-9_-]+)+$/.test(bp)) throw new Error('Invalid configuration: PUBLIC_BASE_URL path must be like /God');
   if (cfg.NODE_ENV === 'production') {
     const missing: string[] = [];
     if (!cfg.PUBLIC_BASE_URL.startsWith('https://')) missing.push('PUBLIC_BASE_URL must be https');

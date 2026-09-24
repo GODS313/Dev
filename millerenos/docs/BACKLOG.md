@@ -18,7 +18,8 @@ Every item answers at least one of: acquire, activate, make/save money, retain, 
 | 12 | Public SEO foundation (en/fa) | ✅ |
 | 13 | Analytics | ✅ |
 | 14 | Backups & monitoring | ✅ scripts tested; needs server + off-site storage |
-| 15 | Deployment | ⏳ blocked on server, domain, bot token (founder) |
+| 15 | Deployment | ⏳ package ready for etebarami.net/God; blocked on server access and a brand-appropriate bot |
+| 16 | Prices in Stars + USDT + TRX | ✅ Stars in Telegram; USDT/TRX website checkout (needs TRON address) |
 
 ## Before public launch (next)
 1. Production infrastructure (server, domain, TLS, bot) — founder inputs required.

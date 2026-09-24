@@ -112,7 +112,7 @@ describe('public website SEO & security headers', () => {
       assert.match(String(index.headers['content-security-policy']), /frame-ancestors https:\/\/web\.telegram\.org/);
       assert.equal(index.headers['x-robots-tag'], 'noindex, nofollow');
       assert.equal(index.headers['cache-control'], 'no-cache');
-      const asset = index.body.match(/\/app\/assets\/[^"]+\.js/)![0];
+      const asset = '/app/' + index.body.match(/\.\/(assets\/[^"]+\.js)/)![1];
       assert.match(String((await app.inject({ method: 'GET', url: asset })).headers['cache-control']), /immutable/);
       for (const url of ['/app/../package.json', '/app/%2e%2e/%2e%2e/package.json', '/app/..%2f..%2fpackage.json']) {
         const r = await app.inject({ method: 'GET', url });
@@ -121,4 +121,37 @@ describe('public website SEO & security headers', () => {
       await app.close();
     },
   );
+
+  it('serves everything under a base path such as /God', async () => {
+    const { createServices } = await import('../src/services.js');
+    const { createLogger } = await import('../src/logger.js');
+    const { BOT_INFO, testConfig } = await import('./helpers.js');
+    const cfg = testConfig(
+      { appUrl: h.cfg.DATABASE_URL, systemUrl: h.cfg.DATABASE_SYSTEM_URL },
+      { PUBLIC_BASE_URL: 'https://etebarami.test/God' },
+    );
+    const s2 = await createServices(cfg, createLogger('fatal'), { botInfo: BOT_INFO });
+    const app = await buildApp(s2, { miniappDir: existsSync(DEFAULT_MINIAPP_DIR) ? DEFAULT_MINIAPP_DIR : '/nonexistent' });
+    const en = await app.inject({ method: 'GET', url: '/God/en/' });
+    assert.equal(en.statusCode, 200);
+    assert.match(en.body, /<link rel="canonical" href="https:\/\/etebarami.test\/God\/en\/">/);
+    assert.match(en.body, /href="\/God\/en\/pricing"/);
+    assert.match(en.body, /href="\/God\/assets\/site\.[a-f0-9]+\.css"/);
+    assert.ok(!/href="\/(en|fa)\//.test(en.body), 'no links escape the base path');
+    const css = en.body.match(/href="(\/God\/assets\/site\.[a-f0-9]+\.css)"/)![1];
+    assert.equal((await app.inject({ method: 'GET', url: css })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'GET', url: '/God/healthz' })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'GET', url: '/God/api/v1/plans' })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'GET', url: '/en/' })).statusCode, 404);
+    const nf = await app.inject({ method: 'GET', url: '/God/en/missing' });
+    assert.equal(nf.statusCode, 404);
+    assert.match((await app.inject({ method: 'GET', url: '/God/robots.txt' })).body, /Disallow: \/God\/api\//);
+    assert.equal((await app.inject({ method: 'GET', url: '/God/en/home' })).headers.location, '/God/en/');
+    if (existsSync(DEFAULT_MINIAPP_DIR)) {
+      assert.equal((await app.inject({ method: 'GET', url: '/God/app' })).headers.location, '/God/app/');
+      assert.equal((await app.inject({ method: 'GET', url: '/God/app/' })).statusCode, 200);
+    }
+    await app.close();
+    await s2.db.close();
+  });
 });

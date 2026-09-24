@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0] — 2026-09-24 (unreleased)
+- Base-path support: the whole platform can run under `https://etebarami.net/God`.
+- Plan prices in Telegram Stars, USDT (TRC-20) and TRX; website checkout with Telegram Login Widget, unique-amount
+  invoices, TronGrid confirmation polling, exactly-once activation, review flags for mismatches.
+- Admin API to change plan prices. Installer and webhook scripts for etebarami.net/God.
+- Docker healthcheck follows the base path. 80 tests.
+
 ## [0.1.0] — 2026-09-24 (unreleased, not deployed)
 First MVP foundation.
 - Backend modular monolith (Fastify, PostgreSQL with RLS, migrations, job worker).

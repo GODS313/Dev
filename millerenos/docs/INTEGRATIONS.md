@@ -26,6 +26,8 @@ Unofficial/self-bot clients, session hijacking or anything that violates a platf
 |---|---|---|
 | Telegram Stars (XTR) | OFFICIAL_SUPPORTED | Millerenos plans (digital service sold inside Telegram — Stars required by Telegram rules) |
 | Manual transfer | LIMITED_SUPPORTED | Merchant's own orders; merchant marks orders paid; Millerenos handles no money and no card data |
+| USDT (TRC-20) on TRON | LIMITED_SUPPORTED (needs `TRON_RECEIVE_ADDRESS`) | Millerenos plans, **website checkout only** |
+| TRX on TRON | LIMITED_SUPPORTED (needs `TRON_RECEIVE_ADDRESS`) | Millerenos plans, **website checkout only** |
 
 Selection rule (`selectProvider`): subscription + Telegram → Stars; merchant order → manual. Card gateways
 (merchant-specific PSPs, Stripe where lawful) plug in behind the same interface later with signed-webhook
@@ -44,3 +46,21 @@ Provider interface `AiProvider`. Implemented: Anthropic (`AI_PROVIDER=anthropic`
 Interfaces `DomainProvider` / `HostingProvider` exist; **no provider is connected** and the marketplace flag is off.
 Needed from the founder: provider name, confirmation of an official reseller API, API credentials (stored only in
 server secrets), and pricing/markup decisions.
+
+## TRON payments (USDT TRC-20 / TRX)
+- Where: `https://<base>/{en|fa}/checkout` on the website. The bot and Mini App never show or link crypto prices,
+  because Telegram requires Stars for digital goods sold inside Telegram.
+- Sign-in: official Telegram Login Widget (`/auth/telegram-web`, signature verified with SHA-256(bot token)),
+  HttpOnly/Secure/SameSite=Lax cookie; forms carry an HMAC CSRF token bound to the session plus an Origin check.
+  Requires `/setdomain` in @BotFather for the site's domain.
+- Invoice: plan price + unique offset (0.0001 × 1..999) so each open invoice has a unique exact amount; valid
+  `CRYPTO_INVOICE_TTL_MINUTES` (default 120).
+- Detection: worker polls TronGrid every minute (`only_confirmed=true`), USDT filtered by the official contract
+  `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`, TRX by `TransferContract` + `SUCCESS` + recipient check. Each tx id is
+  processed once (`webhook_events`). Exact on-time amount → plan activated; anything else → recorded and flagged
+  (`payment.needs_review` / `payment.orphan`) for the admin.
+- Custody: receive-only address. No private keys on the server. Refunds of crypto are manual (sent by the founder
+  from the wallet) and should be recorded by an admin.
+- Prices: `plans.price_usdt_micro`, `plans.price_trx_sun` (6 decimals), editable by superadmin via
+  `PATCH /api/admin/plans/:code`. TRX is volatile — review TRX prices regularly.
+- Legal: accepting crypto is subject to the laws of the founder's and customers' jurisdictions; confirm before launch.

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { adminApi, api, type Workspace } from '../api';
+import { BASE, adminApi, api, type Workspace } from '../api';
 import { useApp } from '../app';
 import { getLocale, num, t, type Key } from '../i18n';
 import { tg, haptic } from '../tg';
@@ -353,7 +353,7 @@ export function Settings() {
         </button>
         <a
           class="btn secondary"
-          href={`/${me.locale}/privacy`}
+          href={`${BASE}/${me.locale}/privacy`}
           target="_blank"
           rel="noopener"
           style={{ width: '100%', background: 'var(--surface)', color: 'var(--text)' }}

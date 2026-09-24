@@ -42,6 +42,9 @@ Admin API (`/api/admin/*`, platform roles only, 404 otherwise): `overview, healt
 users/:id/role (superadmin), workspaces, workspaces/:id/status, payments, payments/:id/refund (superadmin),
 flags, flags/:key (superadmin), audit, ai-usage, support, support/:id, support/:id/reply`.
 
+Website (HTML, cookie session): `GET /auth/telegram-web` (Login Widget), `POST /auth/logout-web`,
+`GET|POST /{locale}/checkout`, `GET /{locale}/pay/:id`. Admin: `PATCH /api/admin/plans/:code` (superadmin; prices in Stars, USDT, TRX).
+
 Other endpoints: `POST /tg/webhook` (Telegram, secret header), `GET /healthz`, `GET /readyz`, `GET /metrics` (bearer `METRICS_TOKEN`).
 
 The API is not public for third parties yet; an OpenAPI document and API keys are Phase 2 (BACKLOG.md).

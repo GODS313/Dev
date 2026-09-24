@@ -7,8 +7,16 @@ import { isEnabled } from '../flags/flags.js';
 import type { TelegramGateway } from './gateway.js';
 
 export async function listPlans(q: Queryable) {
-  const res = await q.query('SELECT code, price_stars, period_days, limits FROM plans WHERE is_active ORDER BY sort');
-  return res.rows as { code: string; price_stars: number; period_days: number; limits: Record<string, number> }[];
+  const res = await q.query(`SELECT code, price_stars, period_days, limits, price_usdt_micro::text, price_trx_sun::text
+       FROM plans WHERE is_active ORDER BY sort`);
+  return res.rows as {
+    code: string;
+    price_stars: number;
+    period_days: number;
+    limits: Record<string, number>;
+    price_usdt_micro: string | null; // USDT, 6 decimals
+    price_trx_sun: string | null; // TRX, 6 decimals
+  }[];
 }
 
 export async function billingOverview(q: Queryable, workspaceId: string) {
@@ -149,66 +157,86 @@ export async function recordSuccessfulPayment(
       await audit(q, { action: 'payment.orphan', metadata: { chargeId: input.chargeId, amount: input.totalAmount } });
       return { kind: 'needs_review' as const, workspaceId: null, reason: 'unknown_invoice' };
     }
-    await q.query(
-      `INSERT INTO payments (workspace_id, invoice_id, provider, provider_charge_id, currency, amount_minor)
-       VALUES ($1, $2, 'telegram_stars', $3, $4, $5)`,
-      [inv.workspace_id, inv.id, input.chargeId, input.currency, input.totalAmount],
-    );
-    const mismatch =
-      inv.status !== 'open'
-        ? 'invoice_not_open'
-        : inv.currency !== input.currency || inv.amount_minor !== String(input.totalAmount)
-          ? 'amount_mismatch'
-          : null;
-    if (mismatch || inv.purpose !== 'subscription' || !inv.plan_code) {
-      // Money was received but cannot be applied automatically → flag for admin (refund or manual apply).
-      await audit(q, {
-        action: 'payment.needs_review',
-        workspaceId: inv.workspace_id,
-        targetType: 'invoice',
-        targetId: inv.id,
-        metadata: { reason: mismatch ?? 'unsupported_purpose' },
-      });
-      return { kind: 'needs_review' as const, workspaceId: inv.workspace_id, reason: mismatch ?? 'unsupported_purpose' };
-    }
-
-    await q.query(`UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1`, [inv.id]);
-    const plan = await q.query('SELECT period_days FROM plans WHERE code = $1', [inv.plan_code]);
-    const days = plan.rows[0].period_days as number;
-    // expire lapsed subscriptions, then extend the current one or start a new period
-    await q.query(
-      `UPDATE subscriptions SET status = 'expired' WHERE workspace_id = $1 AND status = 'active' AND current_period_end <= now()`,
-      [inv.workspace_id],
-    );
-    const cur = await q.query(`SELECT id FROM subscriptions WHERE workspace_id = $1 AND status = 'active' FOR UPDATE`, [inv.workspace_id]);
-    let periodEnd: Date;
-    const renewed = Boolean(cur.rows[0]);
-    if (cur.rows[0]) {
-      const r = await q.query(
-        `UPDATE subscriptions SET plan_code = $2, current_period_end = current_period_end + make_interval(days => $3), cancel_at_period_end = false
-          WHERE id = $1 RETURNING current_period_end`,
-        [cur.rows[0].id, inv.plan_code, days],
-      );
-      periodEnd = r.rows[0].current_period_end;
-    } else {
-      const r = await q.query(
-        `INSERT INTO subscriptions (workspace_id, plan_code, status, current_period_start, current_period_end)
-         VALUES ($1, $2, 'active', now(), now() + make_interval(days => $3)) RETURNING current_period_end`,
-        [inv.workspace_id, inv.plan_code, days],
-      );
-      periodEnd = r.rows[0].current_period_end;
-    }
-    await q.query(`UPDATE trials SET status = 'converted', converted_at = now() WHERE workspace_id = $1 AND status <> 'converted'`, [
-      inv.workspace_id,
-    ]);
-    await q.query('UPDATE webhook_events SET processed_at = now() WHERE id = $1', [ev.rows[0].id]);
-    await track(q, 'payment_completed', { workspaceId: inv.workspace_id, props: { plan: inv.plan_code, provider: 'telegram_stars' } });
-    await track(q, renewed ? 'subscription_renewed' : 'subscription_started', {
-      workspaceId: inv.workspace_id,
-      props: { plan: inv.plan_code },
+    const outcome = await applyInvoicePayment(q, inv, {
+      provider: 'telegram_stars',
+      chargeId: input.chargeId,
+      currency: input.currency,
+      amount: String(input.totalAmount),
     });
-    return { kind: 'activated' as const, workspaceId: inv.workspace_id, planCode: inv.plan_code, periodEnd, renewed };
+    if (outcome.kind === 'activated') await q.query('UPDATE webhook_events SET processed_at = now() WHERE id = $1', [ev.rows[0].id]);
+    return outcome;
   });
+}
+
+/**
+ * Records a received payment against an invoice (inside the caller's transaction) and, when it matches an open
+ * subscription invoice exactly, activates or extends the subscription. Anything else is flagged for review —
+ * money that arrived is never silently dropped. Shared by all payment providers.
+ */
+export async function applyInvoicePayment(
+  q: Queryable,
+  inv: Pick<InvoiceForPayment, 'id' | 'workspace_id' | 'plan_code' | 'purpose' | 'currency' | 'amount_minor' | 'status'>,
+  pay: { provider: string; chargeId: string; currency: string; amount: string },
+): Promise<PaymentOutcome> {
+  const input = { chargeId: pay.chargeId, currency: pay.currency, totalAmount: pay.amount };
+  await q.query(
+    `INSERT INTO payments (workspace_id, invoice_id, provider, provider_charge_id, currency, amount_minor)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [inv.workspace_id, inv.id, pay.provider, input.chargeId, input.currency, input.totalAmount],
+  );
+  const mismatch =
+    inv.status !== 'open'
+      ? 'invoice_not_open'
+      : inv.currency !== input.currency || inv.amount_minor !== input.totalAmount
+        ? 'amount_mismatch'
+        : null;
+  if (mismatch || inv.purpose !== 'subscription' || !inv.plan_code) {
+    // Money was received but cannot be applied automatically → flag for admin (refund or manual apply).
+    await audit(q, {
+      action: 'payment.needs_review',
+      workspaceId: inv.workspace_id,
+      targetType: 'invoice',
+      targetId: inv.id,
+      metadata: { reason: mismatch ?? 'unsupported_purpose' },
+    });
+    return { kind: 'needs_review' as const, workspaceId: inv.workspace_id, reason: mismatch ?? 'unsupported_purpose' };
+  }
+
+  await q.query(`UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1`, [inv.id]);
+  const plan = await q.query('SELECT period_days FROM plans WHERE code = $1', [inv.plan_code]);
+  const days = plan.rows[0].period_days as number;
+  // expire lapsed subscriptions, then extend the current one or start a new period
+  await q.query(
+    `UPDATE subscriptions SET status = 'expired' WHERE workspace_id = $1 AND status = 'active' AND current_period_end <= now()`,
+    [inv.workspace_id],
+  );
+  const cur = await q.query(`SELECT id FROM subscriptions WHERE workspace_id = $1 AND status = 'active' FOR UPDATE`, [inv.workspace_id]);
+  let periodEnd: Date;
+  const renewed = Boolean(cur.rows[0]);
+  if (cur.rows[0]) {
+    const r = await q.query(
+      `UPDATE subscriptions SET plan_code = $2, current_period_end = current_period_end + make_interval(days => $3), cancel_at_period_end = false
+        WHERE id = $1 RETURNING current_period_end`,
+      [cur.rows[0].id, inv.plan_code, days],
+    );
+    periodEnd = r.rows[0].current_period_end;
+  } else {
+    const r = await q.query(
+      `INSERT INTO subscriptions (workspace_id, plan_code, status, current_period_start, current_period_end)
+       VALUES ($1, $2, 'active', now(), now() + make_interval(days => $3)) RETURNING current_period_end`,
+      [inv.workspace_id, inv.plan_code, days],
+    );
+    periodEnd = r.rows[0].current_period_end;
+  }
+  await q.query(`UPDATE trials SET status = 'converted', converted_at = now() WHERE workspace_id = $1 AND status <> 'converted'`, [
+    inv.workspace_id,
+  ]);
+  await track(q, 'payment_completed', { workspaceId: inv.workspace_id, props: { plan: inv.plan_code, provider: pay.provider } });
+  await track(q, renewed ? 'subscription_renewed' : 'subscription_started', {
+    workspaceId: inv.workspace_id,
+    props: { plan: inv.plan_code },
+  });
+  return { kind: 'activated' as const, workspaceId: inv.workspace_id, planCode: inv.plan_code, periodEnd, renewed };
 }
 
 /** Admin-initiated full refund of a Stars payment. */

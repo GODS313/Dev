@@ -9,13 +9,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Base path the app is served under, e.g. "/God" for https://host/God/app/. */
+export const BASE = location.pathname.replace(/\/app(\/.*)?$/, '');
+
 let token: string | null = null;
 export const setToken = (t: string | null) => (token = t);
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api/v1${path}`, {
+    res = await fetch(`${BASE}/api/v1${path}`, {
       method,
       headers: {
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
@@ -32,7 +35,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 }
 
 export async function adminApi<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api/admin${path}`, {
+  const res = await fetch(`${BASE}/api/admin${path}`, {
     method,
     headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), authorization: `Bearer ${token}` },
     body: body !== undefined ? JSON.stringify(body) : undefined,

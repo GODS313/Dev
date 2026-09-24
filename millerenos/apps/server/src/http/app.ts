@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyBaseLogger, type FastifyError } from 'fastify';
 import client from 'prom-client';
+import { basePath } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { safeEqual, sha256 } from '../lib/crypto.js';
 import { scrubSecrets } from '../logger.js';
@@ -21,6 +22,11 @@ export const DEFAULT_MINIAPP_DIR = path.resolve(here, '../../../miniapp/dist');
 const SITE_CSP =
   "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
   "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests";
+// Website checkout embeds the official Telegram Login Widget (script + oauth iframe).
+const CHECKOUT_CSP =
+  "default-src 'self'; script-src https://telegram.org; frame-src https://oauth.telegram.org; style-src 'self'; " +
+  "img-src 'self' data: https://telegram.org https://t.me; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
+  "form-action 'self'; frame-ancestors 'none'";
 // The Mini App runs inside Telegram clients (including web.telegram.org iframes).
 const MINIAPP_CSP =
   "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
@@ -49,6 +55,7 @@ export const metrics = (() => {
 })();
 
 export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) {
+  const bp = basePath(s.cfg);
   const app = Fastify({
     loggerInstance: s.log as unknown as FastifyBaseLogger,
     trustProxy: s.cfg.TRUST_PROXY,
@@ -57,6 +64,11 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
       const given = req.headers['x-request-id'];
       return typeof given === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(given) ? given : randomUUID();
     },
+  });
+
+  // HTML forms (website checkout) post urlencoded bodies.
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 16 * 1024 }, (_req, body, done) => {
+    done(null, Object.fromEntries(new URLSearchParams(body as string)));
   });
 
   await app.register(helmet, {
@@ -86,8 +98,9 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
     (req as unknown as { _t: bigint })._t = process.hrtime.bigint();
   });
   app.addHook('onSend', async (req, reply, payload) => {
-    const url = req.url;
+    const url = bp && req.url.startsWith(bp) ? req.url.slice(bp.length) : req.url;
     if (url.startsWith('/app')) reply.header('content-security-policy', MINIAPP_CSP);
+    else if (/^\/(en|fa)\/checkout/.test(url)) reply.header('content-security-policy', CHECKOUT_CSP);
     else if (!url.startsWith('/api/') && !url.startsWith('/tg/')) reply.header('content-security-policy', SITE_CSP);
     else reply.header('cache-control', 'no-store');
     if (url.startsWith('/api/admin') || url.startsWith('/app')) reply.header('x-robots-tag', 'noindex, nofollow');
@@ -120,77 +133,86 @@ export async function buildApp(s: Services, opts: { miniappDir?: string } = {}) 
     return reply.code(500).send({ error: { code: 'internal', message: 'Something went wrong', requestId: req.id } });
   });
 
-  // ── Health & metrics ─────────────────────────────────────────────────────
-  app.get('/healthz', { config: { rateLimit: false } }, async () => ({ ok: true }));
-  app.get('/readyz', { config: { rateLimit: false } }, async (_req, reply) => {
-    try {
-      await s.db.app.query('SELECT 1');
-      return { ok: true, db: 'up' };
-    } catch {
-      return reply.code(503).send({ ok: false, db: 'down' });
-    }
-  });
-  app.get('/metrics', { config: { rateLimit: false } }, async (req, reply) => {
-    const token = s.cfg.METRICS_TOKEN;
-    const given = req.headers.authorization?.replace(/^Bearer /, '') ?? '';
-    if (!token || !safeEqual(given, token))
-      return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
-    return reply.header('content-type', metrics.registry.contentType).send(await metrics.registry.metrics());
-  });
+  // All routes live under the base path (e.g. /God when PUBLIC_BASE_URL is https://host/God).
+  await app.register(
+    async (r) => {
+      // ── Health & metrics ─────────────────────────────────────────────────────
+      r.get('/healthz', { config: { rateLimit: false } }, async () => ({ ok: true }));
+      r.get('/readyz', { config: { rateLimit: false } }, async (_req, reply) => {
+        try {
+          await s.db.app.query('SELECT 1');
+          return { ok: true, db: 'up' };
+        } catch {
+          return reply.code(503).send({ ok: false, db: 'down' });
+        }
+      });
+      r.get('/metrics', { config: { rateLimit: false } }, async (req, reply) => {
+        const token = s.cfg.METRICS_TOKEN;
+        const given = req.headers.authorization?.replace(/^Bearer /, '') ?? '';
+        if (!token || !safeEqual(given, token))
+          return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
+        return reply.header('content-type', metrics.registry.contentType).send(await metrics.registry.metrics());
+      });
 
-  // ── Telegram webhook ─────────────────────────────────────────────────────
-  app.post('/tg/webhook', { config: { rateLimit: { max: 1200, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const secret = s.cfg.TELEGRAM_WEBHOOK_SECRET;
-    const given = req.headers['x-telegram-bot-api-secret-token'];
-    if (!s.handleUpdate || !secret || typeof given !== 'string' || !safeEqual(given, secret)) {
-      metrics.telegramUpdates.inc({ result: 'rejected' });
-      return reply.code(401).send({ error: { code: 'unauthorized', message: 'Unauthorized', requestId: req.id } });
-    }
-    const update = req.body as { update_id?: unknown };
-    if (!update || typeof update !== 'object' || typeof update.update_id !== 'number') {
-      return reply.code(400).send({ error: { code: 'bad_request', message: 'Bad update', requestId: req.id } });
-    }
-    try {
-      await s.handleUpdate(update);
-      metrics.telegramUpdates.inc({ result: 'ok' });
-    } catch (err) {
-      metrics.telegramUpdates.inc({ result: 'error' });
-      req.log.error({ err: scrubSecrets(String(err)) }, 'telegram update failed');
-      // Payment updates must not be lost: answer 5xx so Telegram redelivers (processing is idempotent).
-      // Other failures answer 200 so one poison update cannot block the queue.
-      const msg = (update as { message?: { successful_payment?: unknown } }).message;
-      if (msg?.successful_payment) {
-        return reply.code(503).send({ error: { code: 'internal', message: 'Retry', requestId: req.id } });
+      // ── Telegram webhook ─────────────────────────────────────────────────────
+      r.post('/tg/webhook', { config: { rateLimit: { max: 1200, timeWindow: '1 minute' } } }, async (req, reply) => {
+        const secret = s.cfg.TELEGRAM_WEBHOOK_SECRET;
+        const given = req.headers['x-telegram-bot-api-secret-token'];
+        if (!s.handleUpdate || !secret || typeof given !== 'string' || !safeEqual(given, secret)) {
+          metrics.telegramUpdates.inc({ result: 'rejected' });
+          return reply.code(401).send({ error: { code: 'unauthorized', message: 'Unauthorized', requestId: req.id } });
+        }
+        const update = req.body as { update_id?: unknown };
+        if (!update || typeof update !== 'object' || typeof update.update_id !== 'number') {
+          return reply.code(400).send({ error: { code: 'bad_request', message: 'Bad update', requestId: req.id } });
+        }
+        try {
+          await s.handleUpdate(update);
+          metrics.telegramUpdates.inc({ result: 'ok' });
+        } catch (err) {
+          metrics.telegramUpdates.inc({ result: 'error' });
+          req.log.error({ err: scrubSecrets(String(err)) }, 'telegram update failed');
+          // Payment updates must not be lost: answer 5xx so Telegram redelivers (processing is idempotent).
+          // Other failures answer 200 so one poison update cannot block the queue.
+          const msg = (update as { message?: { successful_payment?: unknown } }).message;
+          if (msg?.successful_payment) {
+            return reply.code(503).send({ error: { code: 'internal', message: 'Retry', requestId: req.id } });
+          }
+        }
+        return { ok: true };
+      });
+
+      await apiRoutes(r, s);
+      await adminRoutes(r, s);
+
+      // ── Mini App static files ────────────────────────────────────────────────
+      const miniappDir = opts.miniappDir ?? DEFAULT_MINIAPP_DIR;
+      if (existsSync(miniappDir)) {
+        // relative asset URLs need the trailing slash
+        r.get('/app', async (_req, reply) => reply.redirect(`${bp}/app/`, 301));
+        await r.register(fastifyStatic, {
+          root: miniappDir,
+          prefix: '/app/',
+          index: 'index.html',
+          setHeaders: (res, filePath) => {
+            res.header('cache-control', filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable');
+          },
+        });
+      } else {
+        r.get('/app/', async (_req, reply) => reply.code(503).type('text/plain').send('Mini App build not found. Run npm run build.'));
       }
-    }
-    return { ok: true };
-  });
 
-  await apiRoutes(app, s);
-  await adminRoutes(app, s);
-
-  // ── Mini App static files ────────────────────────────────────────────────
-  const miniappDir = opts.miniappDir ?? DEFAULT_MINIAPP_DIR;
-  if (existsSync(miniappDir)) {
-    await app.register(fastifyStatic, {
-      root: miniappDir,
-      prefix: '/app/',
-      index: 'index.html',
-      setHeaders: (res, filePath) => {
-        res.header('cache-control', filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable');
-      },
-    });
-  } else {
-    app.get('/app/', async (_req, reply) => reply.code(503).type('text/plain').send('Mini App build not found. Run npm run build.'));
-  }
-
-  const notFoundPage = webRoutes(app, { cfg: s.cfg, db: s.db });
-  app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api/') || req.url.startsWith('/tg/')) {
-      return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
-    }
-    return notFoundPage(req.url.split('?')[0]!, reply);
-  });
+      const notFoundPage = webRoutes(r, { cfg: s.cfg, db: s.db });
+      r.setNotFoundHandler((req, reply) => {
+        const path = req.url.slice(bp.length);
+        if (path.startsWith('/api/') || path.startsWith('/tg/')) {
+          return reply.code(404).send({ error: { code: 'not_found', message: 'Not found', requestId: req.id } });
+        }
+        return notFoundPage(req.url.split('?')[0]!, reply);
+      });
+    },
+    { prefix: bp },
+  );
 
   return app;
 }

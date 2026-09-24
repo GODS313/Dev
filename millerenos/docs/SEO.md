@@ -28,3 +28,9 @@ start as `noindex` until they pass a quality threshold (content length, unique p
 ## Next (BACKLOG)
 Help center/docs section, blog with reviewed articles in both languages, public store pages (SSR, opt-in indexing),
 Search Console + Bing Webmaster verification, Core Web Vitals RUM, per-locale OG images.
+
+## Hosting under a path (etebarami.net/God)
+Supported technically (canonical, hreflang and sitemaps include `/God`). Limits: `robots.txt` is only honored at the
+host root (etebarami.net/robots.txt, outside this app), so submit `https://etebarami.net/God/sitemap.xml` directly in
+Search Console; brand authority accrues to etebarami.net rather than a Millerenos domain. A dedicated domain is
+recommended once the brand launches publicly; 301 redirects from `/God/...` will preserve rankings.

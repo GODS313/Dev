@@ -78,6 +78,8 @@ millerenos/
 | ADR-8 | Postgres-backed job queue | Redis/BullMQ | One less stateful service in Phase 1. |
 | ADR-9 | AI via provider interface; default provider Anthropic (`claude-opus-5`), configurable | Hard-coded vendor | Swappable; merchant-controlled modes; grounded prompts; audit log. |
 | ADR-10 | Digital goods inside Telegram paid with **Telegram Stars (XTR)** | Card gateways in-bot | Required by Telegram rules for digital goods/services. |
+| ADR-12 | Serve under a configurable base path derived from `PUBLIC_BASE_URL` (all routes in one prefixed Fastify plugin; Mini App uses relative assets) | Separate subdomain | Founder chose etebarami.net/God |
+| ADR-13 | TRON (USDT/TRX) payments via website checkout, receive-only address + TronGrid polling, unique-amount invoices | Payment processor, in-bot crypto | No custody, no keys; complies with Telegram's Stars rule inside Telegram |
 | ADR-11 | Node built-in test runner (`node:test`) | Vitest/Jest | Zero extra dependency; vitest install was blocked by an npm resolver bug. |
 
 ## 6. Request lifecycle (API)

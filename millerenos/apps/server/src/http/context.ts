@@ -6,6 +6,7 @@ import type { Logger } from '../logger.js';
 import { AppError } from '../lib/errors.js';
 import type { AiProvider } from '../modules/ai/provider.js';
 import type { TelegramGateway } from '../modules/billing/gateway.js';
+import type { TronClient } from '../modules/billing/tron.js';
 import { resolveSession } from '../modules/identity/sessions.js';
 import type { UserRow } from '../modules/identity/users.js';
 
@@ -15,6 +16,8 @@ export interface Services {
   log: Logger;
   ai: AiProvider;
   gateway: TelegramGateway;
+  /** TRON network watcher (USDT/TRX); undefined when TRON_RECEIVE_ADDRESS is not configured. */
+  tron?: TronClient;
   /** Handles one Telegram update (grammY). Undefined when the bot token is not configured. */
   handleUpdate?: (update: unknown) => Promise<void>;
 }

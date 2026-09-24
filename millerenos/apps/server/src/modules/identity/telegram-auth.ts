@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { AppError } from '../../lib/errors.js';
 
 export interface TelegramUser {
@@ -69,4 +69,43 @@ export function signInitData(fields: Record<string, string>, botToken: string): 
   const secret = createHmac('sha256', 'WebAppData').update(botToken).digest();
   params.set('hash', createHmac('sha256', secret).update(dcs).digest('hex'));
   return params.toString();
+}
+
+/**
+ * Validates Telegram Login Widget data for website sign-in
+ * (https://core.telegram.org/widgets/login#checking-authorization): secret = SHA256(bot_token).
+ */
+export function validateLoginWidget(
+  fields: Record<string, string>,
+  botToken: string,
+  maxAgeSeconds: number,
+  now: Date = new Date(),
+): TelegramUser {
+  const { hash, ...rest } = fields;
+  if (!hash || !/^[a-f0-9]{64}$/.test(hash)) throw new AppError('unauthorized', 'Invalid login data');
+  const allowed = ['id', 'first_name', 'last_name', 'username', 'photo_url', 'auth_date'];
+  const dcs = Object.entries(rest)
+    .filter(([k]) => allowed.includes(k))
+    .map(([k, v]) => `${k}=${v}`)
+    .sort()
+    .join('\n');
+  const secret = createHash('sha256').update(botToken).digest();
+  const expected = createHmac('sha256', secret).update(dcs).digest();
+  const given = Buffer.from(hash, 'hex');
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new AppError('unauthorized', 'Invalid login signature');
+  const age = now.getTime() / 1000 - Number(rest.auth_date);
+  if (!Number.isFinite(age) || age > maxAgeSeconds || age < -60) throw new AppError('unauthorized', 'Login expired');
+  const id = Number(rest.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('unauthorized', 'Invalid login data');
+  return { id, first_name: rest.first_name, last_name: rest.last_name, username: rest.username };
+}
+
+/** Test helper: signs login widget fields. */
+export function signLoginWidget(fields: Record<string, string>, botToken: string): Record<string, string> {
+  const dcs = Object.entries(fields)
+    .map(([k, v]) => `${k}=${v}`)
+    .sort()
+    .join('\n');
+  const secret = createHash('sha256').update(botToken).digest();
+  return { ...fields, hash: createHmac('sha256', secret).update(dcs).digest('hex') };
 }

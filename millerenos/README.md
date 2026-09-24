@@ -30,7 +30,7 @@ Open http://localhost:8080/en/ for the site. The Mini App needs Telegram (HTTPS 
 ## Quality gates
 ```bash
 npm run lint && npm run format:check && npm run typecheck && npm run build
-TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test   # 68 tests, real PostgreSQL
+TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test   # 80 tests, real PostgreSQL
 npm audit --omit=dev --audit-level=high && npm run licenses -- --check
 ```
 CI: `.github/workflows/millerenos-ci.yml` (runs only for changes under `millerenos/`).

@@ -1,6 +1,6 @@
 import type { Queryable } from '../../db/pool.js';
 
-export type JobType = 'notify_user' | 'expire_trials' | 'purge_sessions' | 'process_account_deletions';
+export type JobType = 'notify_user' | 'expire_trials' | 'purge_sessions' | 'process_account_deletions' | 'check_tron_payments';
 
 export async function enqueue(
   q: Queryable,

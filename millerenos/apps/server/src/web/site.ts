@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { Config } from '../config.js';
+import { basePath, type Config } from '../config.js';
 import type { Db } from '../db/pool.js';
 import { LOCALES, RTL, isLocale, type Locale } from '../i18n/index.js';
 import { listPlans } from '../modules/billing/billing.js';
+import { formatUnits6 } from '../modules/billing/tron.js';
 import { CHANNELS } from '../modules/channels/registry.js';
+import { isEnabled } from '../modules/flags/flags.js';
 import { COPY, PAGES, type PageId } from './content.js';
 import { SITE_CSS } from './styles.js';
 
@@ -19,14 +21,16 @@ export const REDIRECTS: Record<string, string> = {
 /** Paths intentionally removed → 410 Gone. */
 export const GONE = new Set<string>([]);
 
-export const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+export { esc } from './html.js';
+import { esc } from './html.js';
+import { registerCheckout } from './checkout.js';
 
 const LOGO = `<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="currentColor" opacity=".12"/><path d="M8 23V9l8 8 8-8v14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 export function webRoutes(app: FastifyInstance, deps: { cfg: Config; db: Db }) {
   const { cfg, db } = deps;
   const base = cfg.PUBLIC_BASE_URL.replace(/\/$/, '');
+  const bp = basePath(cfg); // routes are registered under this prefix by buildApp; links must include it
   const url = (locale: Locale, path: string) => `${base}/${locale}/${path}`;
   const ctaHref = (page: string) =>
     cfg.TELEGRAM_BOT_USERNAME ? `https://t.me/${cfg.TELEGRAM_BOT_USERNAME}?start=src_web_${page.replace(/-/g, '_')}` : null;
@@ -46,7 +50,7 @@ export function webRoutes(app: FastifyInstance, deps: { cfg: Config; db: Db }) {
         `<link rel="alternate" hreflang="x-default" href="${pageId === 'home' ? `${base}/` : url('en', path)}">`
       : '';
     const navItems = (['features', 'pricing', 'integrations', 'security', 'about', 'contact'] as const)
-      .map((id) => `<a href="/${locale}/${id}"${pageId === id ? ' aria-current="page"' : ''}>${esc(c.nav[id])}</a>`)
+      .map((id) => `<a href="${bp}/${locale}/${id}"${pageId === id ? ' aria-current="page"' : ''}>${esc(c.nav[id])}</a>`)
       .join('');
     const jsonLd = (head.jsonLd ?? [])
       .map((j) => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`)
@@ -64,22 +68,22 @@ ${canonical ? `<link rel="canonical" href="${canonical}">` : ''}${alternates}
 ${canonical ? `<meta property="og:url" content="${canonical}">` : ''}<meta property="og:locale" content="${locale === 'fa' ? 'fa_IR' : 'en_US'}">
 <meta property="og:image" content="${base}/assets/og.svg"><meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0f766e">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="${CSS_PATH}">
+<link rel="icon" href="${bp}/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="${bp}${CSS_PATH}">
 ${jsonLd}
 </head>
 <body>
 <a class="skip" href="#content">${esc(c.skip)}</a>
 <header class="site"><div class="wrap">
-<a class="brand" href="/${locale}/" aria-label="Millerenos">${LOGO}<span>Millerenos</span></a>
+<a class="brand" href="${bp}/${locale}/" aria-label="Millerenos">${LOGO}<span>Millerenos</span></a>
 <nav class="main" aria-label="Main">${navItems}</nav>
-<a class="lang" href="/${other}/${path}" hreflang="${other}" lang="${other}">${esc(c.langSwitch)}</a>
+<a class="lang" href="${bp}/${other}/${path}" hreflang="${other}" lang="${other}">${esc(c.langSwitch)}</a>
 </div></header>
 <main id="content" class="wrap">${body}</main>
 <footer class="site"><div class="wrap">
 <div><strong>Millerenos</strong><br><span class="muted">© ${new Date().getUTCFullYear()} Millerenos. ${esc(c.footer.rights)}</span></div>
-<nav aria-label="${esc(c.footer.legal)}"><a href="/${locale}/privacy">${esc(c.footer.privacy)}</a><a href="/${locale}/terms">${esc(c.footer.terms)}</a>
-<a href="/${locale}/acceptable-use">${esc(c.footer.aup)}</a><a href="/${locale}/status">${esc(c.footer.status)}</a></nav>
+<nav aria-label="${esc(c.footer.legal)}"><a href="${bp}/${locale}/privacy">${esc(c.footer.privacy)}</a><a href="${bp}/${locale}/terms">${esc(c.footer.terms)}</a>
+<a href="${bp}/${locale}/acceptable-use">${esc(c.footer.aup)}</a><a href="${bp}/${locale}/status">${esc(c.footer.status)}</a></nav>
 </div></footer>
 </body></html>`;
   }
@@ -106,7 +110,7 @@ ${jsonLd}
     if (id === 'home') return { html: '', ld: null };
     const c = COPY[locale];
     return {
-      html: `<nav class="crumbs" aria-label="Breadcrumb"><a href="/${locale}/">${esc(c.breadcrumbHome)}</a> › <span aria-current="page">${esc(c.pages[id].h1)}</span></nav>`,
+      html: `<nav class="crumbs" aria-label="Breadcrumb"><a href="${bp}/${locale}/">${esc(c.breadcrumbHome)}</a> › <span aria-current="page">${esc(c.pages[id].h1)}</span></nav>`,
       ld: {
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
@@ -133,16 +137,24 @@ ${jsonLd}
     }
     if (id === 'pricing') {
       const plans = await listPlans(db.app);
+      const cryptoOn = Boolean(cfg.TRON_RECEIVE_ADDRESS && cfg.TELEGRAM_BOT_USERNAME) && (await isEnabled(db.app, 'payments.tron'));
       extra =
         `<div class="cards"><div class="card"><h3>${esc(c.trialCard.title)}</h3><p class="muted">${esc(c.trialCard.text)}</p></div>` +
         plans
           .map(
             (p) =>
               `<div class="card"><h3>${esc(p.code[0]!.toUpperCase() + p.code.slice(1))}</h3><div class="price">${p.price_stars} ⭐</div>` +
-              `<p class="muted">${esc(c.pricingPer(p.period_days))}</p><p>${esc(c.pricingLimits(p.limits.products ?? 0, p.limits.ai_requests_per_day ?? 0))}</p></div>`,
+              `<p class="muted">${esc(c.pricingPer(p.period_days))}</p>` +
+              (cryptoOn && p.price_usdt_micro && p.price_trx_sun
+                ? `<p>${esc(c.cryptoPrice(formatUnits6(p.price_usdt_micro), formatUnits6(p.price_trx_sun)))}</p>`
+                : '') +
+              `<p>${esc(c.pricingLimits(p.limits.products ?? 0, p.limits.ai_requests_per_day ?? 0))}</p>` +
+              (cryptoOn ? `<p><a href="${bp}/${locale}/checkout?plan=${esc(p.code)}">${esc(c.cryptoCta)}</a></p>` : '') +
+              `</div>`,
           )
           .join('') +
-        `</div>`;
+        `</div>` +
+        (cryptoOn ? `<p class="muted">${esc(c.cryptoNote)}</p>` : '');
     }
     if (id === 'integrations') {
       const label = (s: string) =>
@@ -186,7 +198,7 @@ ${jsonLd}
   app.get('/', async (_req, reply) => {
     const body = `<section class="hero"><h1>Millerenos</h1>
       <p class="lead">${esc(COPY.en.pages.home.lead)}</p><p class="lead" lang="fa" dir="rtl">${esc(COPY.fa.pages.home.lead)}</p>
-      <p><a class="btn" href="/en/" hreflang="en">English</a> <a class="btn" href="/fa/" hreflang="fa" lang="fa">فارسی</a></p></section>`;
+      <p><a class="btn" href="${bp}/en/" hreflang="en">English</a> <a class="btn" href="${bp}/fa/" hreflang="fa" lang="fa">فارسی</a></p></section>`;
     const page = layout(
       'en',
       null,
@@ -206,7 +218,7 @@ ${jsonLd}
         html(reply, await renderPage(locale, p.id, p.path), 200, p.id === 'status' ? 'no-store' : 'public, max-age=300'),
       );
     }
-    app.get(`/${locale}`, async (_req, reply) => reply.redirect(`/${locale}/`, 301));
+    app.get(`/${locale}`, async (_req, reply) => reply.redirect(`${bp}/${locale}/`, 301));
   }
 
   app.get(CSS_PATH, async (_req, reply) =>
@@ -228,7 +240,9 @@ ${jsonLd}
   app.get('/robots.txt', async (_req, reply) =>
     reply
       .header('content-type', 'text/plain; charset=utf-8')
-      .send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app/\nDisallow: /tg/\n\nSitemap: ${base}/sitemap.xml\n`),
+      .send(
+        `User-agent: *\nAllow: ${bp}/\nDisallow: ${bp}/api/\nDisallow: ${bp}/app/\nDisallow: ${bp}/tg/\n\nSitemap: ${base}/sitemap.xml\n`,
+      ),
   );
 
   app.get('/sitemap.xml', async (_req, reply) =>
@@ -261,19 +275,22 @@ ${jsonLd}
     return reply
       .header('content-type', 'text/plain; charset=utf-8')
       .send(
-        `Contact: ${process.env.SECURITY_CONTACT ?? (cfg.TELEGRAM_BOT_USERNAME ? `https://t.me/${cfg.TELEGRAM_BOT_USERNAME}` : `${base}/en/contact`)}\n` +
+        `Contact: ${cfg.SECURITY_CONTACT ?? (cfg.TELEGRAM_BOT_USERNAME ? `https://t.me/${cfg.TELEGRAM_BOT_USERNAME}` : `${base}/en/contact`)}\n` +
           `Expires: ${expires}\nPreferred-Languages: en, fa\nPolicy: ${base}/en/security\nCanonical: ${base}/.well-known/security.txt\n`,
       );
   });
 
+  registerCheckout(app, { cfg, db, layout });
+
   /** 404 / 410 / redirect handling for non-API paths. */
-  return function notFoundPage(path: string, reply: FastifyReply) {
+  return function notFoundPage(fullPath: string, reply: FastifyReply) {
+    const path = bp && fullPath.startsWith(bp) ? fullPath.slice(bp.length) || '/' : fullPath;
     const target = REDIRECTS[path];
-    if (target) return reply.redirect(target, 301);
+    if (target) return reply.redirect(`${bp}${target}`, 301);
     const seg = path.split('/')[1];
     const locale: Locale = isLocale(seg) ? seg : 'en';
     const c = COPY[locale];
-    const body = `<section class="hero"><h1>${esc(c.notFoundTitle)}</h1><p class="lead">${esc(c.notFoundText)}</p><p><a class="btn" href="/${locale}/">${esc(c.breadcrumbHome)}</a></p></section>`;
+    const body = `<section class="hero"><h1>${esc(c.notFoundTitle)}</h1><p class="lead">${esc(c.notFoundText)}</p><p><a class="btn" href="${bp}/${locale}/">${esc(c.breadcrumbHome)}</a></p></section>`;
     return html(
       reply,
       layout(locale, null, '', { title: `${c.notFoundTitle} — Millerenos`, description: c.notFoundText, noindex: true }, body),

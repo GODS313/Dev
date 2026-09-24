@@ -7,6 +7,7 @@ import type { Services } from './http/context.js';
 import type { Logger } from './logger.js';
 import { createAiProvider } from './modules/ai/provider.js';
 import { NullGateway } from './modules/billing/gateway.js';
+import { TronGridClient } from './modules/billing/tron.js';
 
 /** Wires infrastructure into the Services bag used by HTTP routes and the worker. */
 export async function createServices(
@@ -16,9 +17,10 @@ export async function createServices(
 ): Promise<Services & { bot?: ReturnType<typeof createBot>['bot'] }> {
   const db = createDb({ appUrl: cfg.DATABASE_URL, systemUrl: cfg.DATABASE_SYSTEM_URL, max: cfg.DATABASE_POOL_MAX });
   const ai = createAiProvider(cfg);
+  const tron = cfg.TRON_RECEIVE_ADDRESS ? new TronGridClient(cfg.TRON_API_BASE, cfg.TRONGRID_API_KEY) : undefined;
   if (!cfg.TELEGRAM_BOT_TOKEN) {
     log.warn('TELEGRAM_BOT_TOKEN not set: bot, Mini App sign-in and payments are disabled');
-    return { cfg, db, log, ai, gateway: new NullGateway() };
+    return { cfg, db, log, ai, tron, gateway: new NullGateway() };
   }
   const { bot, gateway } = createBot({ cfg, db, log, botInfo: opts.botInfo });
   if (!opts.botInfo) await bot.init(); // getMe
@@ -30,5 +32,5 @@ export async function createServices(
       throw err;
     }
   };
-  return { cfg, db, log, ai, gateway, handleUpdate, bot };
+  return { cfg, db, log, ai, tron, gateway, handleUpdate, bot };
 }

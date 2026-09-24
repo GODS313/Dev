@@ -6,6 +6,7 @@ import { createLogger, scrubSecrets } from './logger.js';
 import { processDueDeletions } from './modules/account/account.js';
 import { claim, complete, enqueue, fail, requeueStale, type ClaimedJob } from './modules/jobs/queue.js';
 import { expireDueTrials } from './modules/trial/trials.js';
+import { processTronPayments } from './modules/billing/tron.js';
 import { createServices } from './services.js';
 import { miniAppUrl } from './bot/bot.js';
 import type { MessageKey } from './i18n/index.js';
@@ -61,6 +62,28 @@ export async function runJob(s: Services, job: ClaimedJob) {
       await db.system.query(`DELETE FROM sessions WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'`);
       await db.system.query(`DELETE FROM jobs WHERE status = 'done' AND finished_at < now() - interval '14 days'`);
       return;
+    case 'check_tron_payments': {
+      if (!s.tron) return;
+      const { outcomes } = await processTronPayments(db, cfg, s.tron);
+      for (const o of outcomes) {
+        if (o.kind === 'activated') {
+          const owner = await db.system.query('SELECT owner_user_id FROM workspaces WHERE id = $1', [o.workspaceId]);
+          await enqueue(db.system, 'notify_user', {
+            userId: owner.rows[0].owner_user_id,
+            key: 'bot.payment_success',
+            vars: { plan: o.planCode, date: o.periodEnd.toISOString().slice(0, 10) },
+          });
+        } else if (o.kind === 'needs_review') {
+          for (const adminId of cfg.PLATFORM_ADMIN_TELEGRAM_IDS) {
+            await enqueue(db.system, 'notify_user', {
+              telegramUserId: adminId.toString(),
+              raw: `⚠️ TRON payment needs review: ${o.reason}`,
+            });
+          }
+        }
+      }
+      return;
+    }
     case 'process_account_deletions':
       await db.systemTx((q) => processDueDeletions(q));
       return;
@@ -74,6 +97,7 @@ async function schedule(s: Services) {
   await enqueue(s.db.system, 'expire_trials', {}, { dedupeKey: `expire_trials:${minute}` });
   await enqueue(s.db.system, 'purge_sessions', {}, { dedupeKey: `purge_sessions:${hour}` });
   await enqueue(s.db.system, 'process_account_deletions', {}, { dedupeKey: `deletions:${hour}` });
+  if (s.tron) await enqueue(s.db.system, 'check_tron_payments', {}, { dedupeKey: `tron:${minute}`, maxAttempts: 1 });
 }
 
 async function main(cfg: Config) {

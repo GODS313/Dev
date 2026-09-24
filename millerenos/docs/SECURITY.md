@@ -21,6 +21,7 @@ authorized defensive testing performed on Millerenos' own code in a local enviro
 | Secrets | Leakage in logs/errors | pino redaction list (`logger.ts`), `scrubSecrets()` for bot tokens / API keys / DB URLs, config errors never print values, generic 500 bodies with request id | `unit.test.ts` |
 | Availability | Brute force / flooding | Global 300 req/min per session or IP, stricter per-route limits (auth 20/min, trial 5/min, AI 20/min), per-Telegram-user bot flood limiter, body limit 256 KB, statement timeout 15 s | `bot.test.ts` |
 | Mass assignment | Overwriting protected fields | zod `.strict()` schemas on updates | `commerce.test.ts` |
+| Crypto checkout (web) | Forged login, CSRF, open redirect, fake tokens, replayed tx, underpayment | Login Widget HMAC check, cookie HttpOnly/Secure/SameSite, session-bound CSRF token + Origin check, redirect allow-list, official USDT contract + recipient check, confirmed tx only, tx id dedupe, exact amount + time window, mismatches flagged | `crypto.test.ts` |
 | Static files | Path traversal | `@fastify/static` ≥ 10.1.4 (patched GHSA-83w8-p2f5-377r / GHSA-8pvw-jcv7-9cmj) | `web.test.ts` |
 | Backups | Data exposure | `age` public-key encryption, private key offline, `umask 077`, checksum, dedicated read-only `BYPASSRLS` role | restore test (see BACKUP_RESTORE.md) |
 
@@ -41,7 +42,7 @@ Not applicable today (documented so they are not forgotten):
 
 ## 3. Security testing performed (2026-09-24, local, own code only)
 
-Automated in CI on every change: 68 tests. Highlights of what was attacked and the result:
+Automated in CI on every change: 80 tests. Highlights of what was attacked and the result:
 
 | Test | Result |
 |---|---|
