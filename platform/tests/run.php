@@ -286,6 +286,9 @@ check($app->handle(req('GET', '/admin/tasks', [], $cookies))->status === 200, 't
 Database::run("UPDATE task_settings SET enabled = 0 WHERE task_key='build_apk'");
 $flash = $app->handle(req('POST', '/admin/tasks/build_apk/run', ['_csrf' => $csrf], $cookies))->cookies['mp_flash'][0] ?? '';
 check(str_contains($flash, 'غیرفعال'), 'disabled task refuses to run');
+$pausedRun = \App\Tasks\Runner::createRun('build_apk', 'disabled-worker-test');
+\App\Tasks\Runner::advanceAll();
+check(\App\Tasks\Runner::run((int) $pausedRun['id'])['status'] === 'queued', 'disabled task is not advanced by worker');
 
 \App\Core\Http::$transport = null;
 
@@ -315,6 +318,8 @@ check($r->status === 429, 'login throttled');
 // Worker tick
 $tick = \App\Core\Worker::tick(5);
 check(is_array($tick) && $tick['errors'] === [], 'worker tick runs');
+
+require __DIR__ . '/receiver.php';
 
 echo "$count checks, $failures failed\n";
 $rmrf = function (string $path) use (&$rmrf): void {

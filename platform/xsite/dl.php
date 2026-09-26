@@ -5,6 +5,8 @@ declare(strict_types=1);
 // button at this file to always hand out the newest release. This does not
 // touch the site's existing download.php.
 
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
 $meta = @file_get_contents(__DIR__ . '/releases/latest.json');
 $data = $meta ? json_decode($meta, true) : null;
 $file = is_array($data) ? __DIR__ . '/' . ($data['file'] ?? '') : '';

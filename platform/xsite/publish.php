@@ -28,8 +28,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 
 // Read the shared secret from the panel's env file (outside this web directory).
 $secret = '';
+$stateDir = '';
 foreach ([dirname(__DIR__, 2) . '/platform/config/app.env', dirname(__DIR__) . '/platform/config/app.env'] as $envFile) {
     if (is_file($envFile)) {
+        $stateDir = dirname($envFile, 2) . '/storage';
         foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
             if (strncmp(ltrim($line), 'XBUILD_SECRET=', 14) === 0) {
                 $secret = trim(trim(explode('=', $line, 2)[1]), "\"'");
@@ -53,7 +55,14 @@ if ($ts === '' || !ctype_digit($ts) || abs(time() - (int) $ts) > 300) {
     fail(401, 'stale or missing timestamp');
 }
 
-$body = (string) file_get_contents('php://input');
+$maxBytes = 80 * 1024 * 1024;
+if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $maxBytes) {
+    fail(413, 'apk too large');
+}
+$body = (string) file_get_contents('php://input', false, null, 0, $maxBytes + 1);
+if (strlen($body) > $maxBytes) {
+    fail(413, 'apk too large');
+}
 if (strlen($body) < 1000 || substr($body, 0, 2) !== 'PK') {
     fail(422, 'not an apk');
 }
@@ -66,14 +75,45 @@ if (!hash_equals($expected, $sig)) {
     fail(401, 'bad signature');
 }
 
-$slug = preg_replace('/[^A-Za-z0-9._-]+/', '-', $name . '-' . $version) ?: 'app';
+// Serialize publication and keep replay state outside the web root. A retry
+// with a fresh timestamp is idempotent by content hash; an exact replay is not.
+if (!is_dir($stateDir) && !@mkdir($stateDir, 0700, true)) {
+    fail(500, 'cannot create private state');
+}
+$lock = fopen($stateDir . '/apk-publish.lock', 'c');
+if ($lock === false || !flock($lock, LOCK_EX)) {
+    fail(503, 'publication busy');
+}
+register_shutdown_function(static function () use ($lock): void {
+    flock($lock, LOCK_UN);
+    fclose($lock);
+});
+$replayFile = $stateDir . '/apk-replay.json';
+$seen = is_file($replayFile) ? json_decode((string) file_get_contents($replayFile), true) : [];
+if (!is_array($seen)) {
+    fail(500, 'invalid replay state');
+}
+$seen = array_filter($seen, static fn ($expires): bool => (int) $expires >= time());
+if (isset($seen[$sig])) {
+    fail(409, 'request already used');
+}
+$seen[$sig] = (int) $ts + 300;
+if (file_put_contents($replayFile, json_encode($seen), LOCK_EX) === false) {
+    fail(500, 'cannot save replay state');
+}
+@chmod($replayFile, 0600);
+
 $dir = __DIR__ . '/releases';
 if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
     fail(500, 'cannot create releases directory');
 }
-$fileName = $slug . '.apk';
-if (@file_put_contents($dir . '/' . $fileName, $body, LOCK_EX) === false) {
+$fileName = $actualHash . '.apk';
+$duplicate = is_file($dir . '/' . $fileName);
+if (!$duplicate && @file_put_contents($dir . '/' . $fileName . '.tmp', $body, LOCK_EX) !== strlen($body)) {
     fail(500, 'cannot store apk (disk space?)');
+}
+if (!$duplicate && !@rename($dir . '/' . $fileName . '.tmp', $dir . '/' . $fileName)) {
+    fail(500, 'cannot finalize apk');
 }
 
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -86,8 +126,14 @@ $meta = [
     'sha256' => $actualHash,
     'logo_url' => $h('X-Logo-Url'),
     'published_at' => gmdate('c'),
-    'url' => $base . '/releases/' . $fileName,
+    'url' => $base . '/dl.php',
 ];
-@file_put_contents($dir . '/latest.json', json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+if (!$duplicate || !is_file($dir . '/latest.json')) {
+    $encoded = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    if ($encoded === false || file_put_contents($dir . '/latest.json.tmp', $encoded, LOCK_EX) !== strlen($encoded)
+        || !rename($dir . '/latest.json.tmp', $dir . '/latest.json')) {
+        fail(500, 'cannot update latest release');
+    }
+}
 
-echo json_encode(['ok' => true] + $meta, JSON_UNESCAPED_UNICODE);
+echo json_encode(['ok' => true, 'duplicate' => $duplicate] + $meta, JSON_UNESCAPED_UNICODE);

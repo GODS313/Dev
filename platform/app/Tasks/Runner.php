@@ -87,6 +87,19 @@ final class Runner
     /** Runs pending steps for one run until it reaches a terminal state or the step budget ends. */
     public static function advance(array $run, int $maxSteps = 6): array
     {
+        if (!self::enabled($run['task_key'])) {
+            return self::run((int) $run['id']) ?? $run;
+        }
+        $lock = fopen(\App\Core\Config::storagePath('task-' . (int) $run['id'] . '.lock'), 'c');
+        if ($lock === false) {
+            throw new \RuntimeException('Cannot open task lock');
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
+            return self::run((int) $run['id']) ?? $run;
+        }
+        try {
+        $run = self::run((int) $run['id']) ?? $run;
         $task = Registry::get($run['task_key']);
         $settings = self::settings($run['task_key'])['values'];
         $secret = self::secret($run['task_key']);
@@ -103,6 +116,10 @@ final class Runner
             }
         }
         return $run;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /** Advances every non-terminal run across all tasks (called by the worker). */
@@ -110,6 +127,9 @@ final class Runner
     {
         $count = 0;
         foreach (Database::all("SELECT * FROM task_runs WHERE status NOT IN ('done','failed','skipped') ORDER BY id LIMIT 20") as $run) {
+            if (!self::enabled($run['task_key'])) {
+                continue;
+            }
             self::advance($run);
             $count++;
         }
