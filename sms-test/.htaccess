@@ -1,0 +1,9 @@
+Options -Indexes
+<FilesMatch "^(README|.*\.sql|\.env|composer\.(json|lock))$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^api/(.*)$ api/index.php?path=$1 [QSA,L]
+  RewriteRule ^(?:app|storage|docs|android)/ - [F,L]
+</IfModule>
