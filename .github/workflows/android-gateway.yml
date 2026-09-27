@@ -1,0 +1,29 @@
+name: Android Gateway APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sms-test/android/**'
+      - '.github/workflows/android-gateway.yml'
+  workflow_dispatch:
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Gradle
+        run: |
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.10.2-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+      - name: Build debug APK
+        run: /tmp/gradle-8.10.2/bin/gradle --no-daemon -p sms-test/android :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: etebarami-gateway-debug-apk
+          path: sms-test/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
