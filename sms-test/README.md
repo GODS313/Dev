@@ -1,6 +1,6 @@
 # Etebarami SMS Gateway
 
-نسخهٔ آزمایشی مستقل برای نصب زیرمسیر `https://etebarami.net/sms-test/`. هیچ فایل ریشهٔ سایت را تغییر نمی‌دهد. اجزای تحویل‌شده: پنل PHP با SQLite محلی سازگار با cPanel، API دستگاه، مهاجرت اولیهٔ دیتابیس، Cron شبیه‌سازی Test Mode، و سورس اپ Android با حداقل API 26.
+نسخهٔ آزمایشی مستقل برای نصب زیرمسیر `https://etebarami.net/sendo/`. هیچ فایل ریشهٔ سایت را تغییر نمی‌دهد. اجزای تحویل‌شده: پنل PHP با SQLite محلی سازگار با cPanel، API دستگاه، مهاجرت اولیهٔ دیتابیس، Cron شبیه‌سازی Test Mode، و سورس اپ Android با حداقل API 26.
 
 > ارسال فقط برای شماره‌هایی که رضایت دریافت پیام برایشان ثبت شده مجاز است. Blocklist هنگام ساخت صف بررسی می‌شود. حالت Test Mode هرگز به گوشی پیام نمی‌فرستد. ارسال واقعی به محدودیت حداقل ۳۰ ثانیه بین پیام‌ها پایبند است.
 
@@ -12,8 +12,8 @@
 
 ## نصب cPanel
 
-1. یک پوشهٔ خالی `public_html/sms-test/` بسازید و ZIP مخصوص cPanel را همان‌جا Extract کنید تا `install.php` مستقیماً در آن پوشه باشد.
-2. `https://etebarami.net/sms-test/install.php` را با HTTPS باز کنید؛ نصب‌گر خودش فایل SQLite و همهٔ جدول‌ها را در `storage/gateway.sqlite` می‌سازد.
+1. یک پوشهٔ خالی `public_html/sendo/` بسازید و ZIP مخصوص cPanel را همان‌جا Extract کنید تا `install.php` مستقیماً در آن پوشه باشد.
+2. `https://etebarami.net/sendo/install.php` را با HTTPS باز کنید؛ نصب‌گر خودش فایل SQLite و همهٔ جدول‌ها را در `storage/gateway.sqlite` می‌سازد.
 3. فقط نام کاربری مدیر و رمز قوی (حداقل ۱۲ نویسه) را وارد کنید. نیازی به اطلاعات دیتابیس/cPanel نیست.
 4. بعد از نصب به صفحهٔ ورود بروید. نصب‌گر با `storage/installed.lock` قفل می‌شود. از حذف `app/config.php` یا `storage/gateway.sqlite` خودداری کنید.
 5. اگر نصب قبل از ایجاد قفل قطع شد، پیام خطا را بررسی کنید. فایل نیمه‌ساخته فقط در صورتی حذف می‌شود که همین تلاش نصب آن را ایجاد کرده باشد.
@@ -25,7 +25,7 @@
 ## اتصال Android و Pair
 
 1. در پنل از «گیت‌وی‌ها» دستگاه بسازید و کد ۸ رقمی را در کمتر از ۱۰ دقیقه در اپ وارد کنید.
-2. سورس `android/` را با Android Studio باز و روی گوشی Android 8+ نصب کنید. آدرس Backend را `https://etebarami.net/sms-test` بگذارید. اینترنت و زمان صحیح گوشی لازم است.
+2. سورس `android/` را با Android Studio باز و روی گوشی Android 8+ نصب کنید. آدرس Backend را `https://etebarami.net/sendo` بگذارید. اینترنت و زمان صحیح گوشی لازم است.
 3. شماره سیم‌کارت و نام اپراتور را در صورت تمایل ثبت و مجوز SEND_SMS را تأیید کنید. این نسخه از SIM پیش‌فرض گوشی استفاده می‌کند.
 4. پس از Pair، اپ توکن مخصوص Gateway را فقط در preferences خصوصی نگه می‌دارد و heartbeat ارسال می‌کند. پنل دستگاه را Online نشان می‌دهد.
 5. دستگاه باید از محدودیت‌های اجرای پس‌زمینهٔ EMUI مستثنا شود: App launch/Autostart و Battery optimization را برای اپ اجازه دهید.
@@ -41,7 +41,7 @@
 در cPanel → Cron Jobs یک وظیفهٔ هر دقیقه اضافه کنید. مسیر PHP به هاست بستگی دارد؛ نمونه:
 
 ```sh
-/usr/local/bin/php -q /home/CPANEL_USER/public_html/sms-test/cron.php
+/usr/local/bin/php -q /home/CPANEL_USER/public_html/sendo/cron.php
 ```
 
 مسیر home و PHP را با اطلاعات همان cPanel جایگزین کنید. Cron فقط کمپین Test Mode را شبیه‌سازی و Gatewayهای بدون heartbeat را Offline می‌کند.
@@ -74,6 +74,6 @@ Job ID یکتا و callbackها idempotent هستند. ارسال پیامک ذ�
 - از رمز مدیر منحصربه‌فرد و طولانی استفاده کنید؛ ZIP و فایل نصب را پس از نصب از مسیر عمومی حذف کنید.
 - پیش از استفادهٔ عملی، backup دیتابیس و فایل تنظیمات را خارج از webroot نگه دارید. توکن‌ها را افشا نکنید.
 
-## محدودیت نسخهٔ آزمایشی
+## وضعیت و موارد نیازمند آزمون روی دستگاه/هاست
 
-این بسته مرحلهٔ اول است. ساخت و نمایش صف، پنل، ورود، تنظیم Telegram، Pair، heartbeat، Import فایل در فرم کمپین و Test SMS یک‌گیرنده را فراهم می‌کند. گروه‌بندی کامل، CSV export، انتخاب SIM دوگانه، webhookهای رویدادی Telegram و APK امضاشده در این نسخه آماده نیستند. تست cPanel، ارسال واقعی و build APK نیازمند میزبان/دستگاه واقعی است.
+پنل شامل ورود، داشبورد، Campaign/Queue، گزارش ردیفی و CSV، Contacts با import TXT/CSV و گروه‌ها، Blocklist/Consent، قالب پیام، فاصلهٔ ارسال، Test Mode، Telegram و لاگ‌هاست. اپ Android توکن را با Android Keystore رمز می‌کند و نتیجهٔ ارسال را در صف محلی نگه می‌دارد تا پس از اتصال Sync کند. انتخاب سیم دوگانه در این نسخه نیست؛ از SIM پیش‌فرض گوشی استفاده می‌شود. ساخت APK امضاشده و تست واقعی روی cPanel و گوشی Huawei به Android SDK، حساب هاست و دستگاه نیاز دارد.

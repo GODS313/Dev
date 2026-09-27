@@ -11,14 +11,15 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 class GatewayWorker(ctx: Context, params: WorkerParameters): CoroutineWorker(ctx,params) {
     private val prefs=ctx.getSharedPreferences("gateway",Context.MODE_PRIVATE)
-    override suspend fun doWork()=withContext(Dispatchers.IO){try{var token=prefs.getString("token",null)
-        if(token==null){val body=JSONObject().put("pairing_code",prefs.getString("pairing_code","")).put("device_model",Build.MANUFACTURER+" "+Build.MODEL).put("android_version",Build.VERSION.RELEASE).put("app_version","0.1.0").put("phone_number",prefs.getString("phone_number","")).put("operator",prefs.getString("operator",""));val res=request("POST","/api/gateway/pair",null,body);token=res.getString("token");prefs.edit().putString("token",token).remove("pairing_code").apply()}
-        request("POST","/api/gateway/heartbeat",token,JSONObject().put("device_model",Build.MANUFACTURER+" "+Build.MODEL).put("android_version",Build.VERSION.RELEASE).put("app_version","0.1.0").put("phone_number",prefs.getString("phone_number","")).put("operator",prefs.getString("operator","")))
+    override suspend fun doWork()=withContext(Dispatchers.IO){try{var token=SecretStore.get(applicationContext,"token")
+        if(token==null){val body=JSONObject().put("pairing_code",prefs.getString("pairing_code","")).put("device_model",Build.MANUFACTURER+" "+Build.MODEL).put("android_version",Build.VERSION.RELEASE).put("app_version","0.2.0").put("phone_number",prefs.getString("phone_number","")).put("operator",prefs.getString("operator",""));val res=request("POST","/api/gateway/pair",null,body);token=res.getString("token");SecretStore.put(applicationContext,"token",token);prefs.edit().remove("pairing_code").apply()}
+        request("POST","/api/gateway/heartbeat",token,JSONObject().put("device_model",Build.MANUFACTURER+" "+Build.MODEL).put("android_version",Build.VERSION.RELEASE).put("app_version","0.2.0").put("phone_number",prefs.getString("phone_number","")).put("operator",prefs.getString("operator","")))
         val jobResponse=request("GET","/api/gateway/jobs",token,null);val jobs=jobResponse.optJSONArray("jobs")
-        if(jobs!=null) for(i in 0 until jobs.length()){val job=jobs.getJSONObject(i);try{SmsSender.send(applicationContext,job.getLong("id"),job.getString("phone"),job.getString("body"),prefs.getString("base_url","")!!,token!!)}catch(e:Exception){request("POST","/api/gateway/jobs/${job.getLong("id")}/failed",token,JSONObject().put("error",e.message?:"send error"))}}
+        if(jobs!=null) for(i in 0 until jobs.length()){val job=jobs.getJSONObject(i);try{SmsSender.send(applicationContext,job.getLong("id"),job.getString("phone"),job.getString("body"))}catch(e:Exception){ReportQueue.add(applicationContext,job.getLong("id"),"failed",e.message?:"send error")}}
         if(jobs!=null && jobs.length()>0) enqueueDelayed(applicationContext,jobResponse.optLong("poll_after_seconds",30))
         Result.success()
     }catch(e:Exception){if(runAttemptCount<5) Result.retry() else Result.failure()}}

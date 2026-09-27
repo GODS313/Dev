@@ -14,3 +14,4 @@ CREATE TABLE telegram_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEX
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER, action TEXT NOT NULL, details TEXT, ip TEXT, created_at TEXT NOT NULL);
 CREATE INDEX audit_logs_created_at ON audit_logs(created_at);
 CREATE TABLE api_rate_limits (bucket_key TEXT PRIMARY KEY, window_start TEXT NOT NULL, hits INTEGER NOT NULL);
+CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);

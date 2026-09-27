@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState)
         val box=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(36,48,36,32) }
         box.addView(TextView(this).apply { text="Etebarami SMS Gateway"; textSize=22f })
-        val url=EditText(this).apply { hint="https://etebarami.net/sms-test"; setText(prefs.getString("base_url","")); singleLine=true }
+        val url=EditText(this).apply { hint="https://etebarami.net/sendo"; setText(prefs.getString("base_url","")); singleLine=true }
         val code=EditText(this).apply { hint="Pairing code (8 characters)"; setText(prefs.getString("pairing_code","")); singleLine=true }
         val phone=EditText(this).apply { hint="شماره سیم‌کارت (اختیاری)"; setText(prefs.getString("phone_number","")); singleLine=true }
         val operator=EditText(this).apply { hint="اپراتور (مثلاً Irancell)"; setText(prefs.getString("operator","")); singleLine=true }
@@ -27,11 +27,11 @@ class MainActivity : AppCompatActivity() {
         val pair=Button(this).apply { text="ذخیره و Pair"; setOnClickListener { val u=url.text.toString().trim().trimEnd('/'); prefs.edit().putString("base_url",u).putString("pairing_code",code.text.toString().trim()).putString("phone_number",phone.text.toString().trim()).putString("operator",operator.text.toString().trim()).apply(); if(ContextCompat.checkSelfPermission(this@MainActivity,Manifest.permission.SEND_SMS)!=PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this@MainActivity,arrayOf(Manifest.permission.SEND_SMS),12); else GatewayWorker.pair(this@MainActivity); status.text="در حال Pair شدن…" } }
         box.addView(pair)
         val sync=Button(this).apply { text="Sync now"; setOnClickListener { GatewayWorker.enqueue(this@MainActivity); status.text="Sync در صف قرار گرفت." } };box.addView(sync)
-        status=TextView(this).apply { text="توکن دستگاه فقط در حافظه خصوصی اپ ذخیره می‌شود."; textSize=14f };box.addView(status)
+        status=TextView(this).apply { text="توکن با Android Keystore رمز می‌شود؛ گزارش‌های ارسال در قطعی اینترنت محلی صف می‌شوند."; textSize=14f };box.addView(status)
         setContentView(ScrollView(this).apply { addView(box) })
         val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         val periodic=PeriodicWorkRequestBuilder<GatewayWorker>(15,TimeUnit.MINUTES).setConstraints(constraints).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork("gateway-heartbeat",ExistingPeriodicWorkPolicy.UPDATE,periodic)
-        if(prefs.getString("token",null)!=null) GatewayWorker.enqueue(this)
+        if(SecretStore.get(this,"token")!=null) GatewayWorker.enqueue(this);if(ReportQueue.queued(this))ReportQueue.schedule(this)
     }
 }
