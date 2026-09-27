@@ -1,37 +1,258 @@
 package net.etebarami.smsgateway
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
+import android.database.Cursor
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
-import android.telephony.TelephonyManager
+import android.provider.ContactsContract
+import android.telephony.PhoneNumberUtils
+import android.view.Gravity
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.work.*
-import java.util.concurrent.TimeUnit
 
+/** Local, user-controlled send UI. No backend pairing or activation code is needed. */
 class MainActivity : AppCompatActivity() {
-    private val prefs by lazy { getSharedPreferences("gateway", MODE_PRIVATE) }
+    private val requestPermissionsCode = 120
+    private val requestContactCode = 121
+    private var activeChannel: Channel? = null
+    private lateinit var root: LinearLayout
     private lateinit var status: TextView
-    override fun onRequestPermissionsResult(requestCode:Int, permissions:Array<out String>, grantResults:IntArray) { super.onRequestPermissionsResult(requestCode,permissions,grantResults); if(requestCode==12 && grantResults.isNotEmpty() && grantResults[0]==PackageManager.PERMISSION_GRANTED) GatewayWorker.pair(this) else status.text="برای ارسال SMS مجوز لازم است." }
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState)
-        val box=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(36,48,36,32) }
-        box.addView(TextView(this).apply { text="Etebarami SMS Gateway"; textSize=22f })
-        val url=EditText(this).apply { hint="https://etebarami.net/sendo"; setText(prefs.getString("base_url","")); setSingleLine(true) }
-        val code=EditText(this).apply { hint="Pairing code (8 characters)"; setText(prefs.getString("pairing_code","")); setSingleLine(true) }
-        val phone=EditText(this).apply { hint="شماره سیم‌کارت (اختیاری)"; setText(prefs.getString("phone_number","")); setSingleLine(true) }
-        val operator=EditText(this).apply { hint="اپراتور (مثلاً Irancell)"; setText(prefs.getString("operator","")); setSingleLine(true) }
-        box.addView(url); box.addView(code); box.addView(phone); box.addView(operator)
-        val pair=Button(this).apply { text="ذخیره و Pair"; setOnClickListener { val u=url.text.toString().trim().trimEnd('/'); prefs.edit().putString("base_url",u).putString("pairing_code",code.text.toString().trim()).putString("phone_number",phone.text.toString().trim()).putString("operator",operator.text.toString().trim()).apply(); if(ContextCompat.checkSelfPermission(this@MainActivity,Manifest.permission.SEND_SMS)!=PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this@MainActivity,arrayOf(Manifest.permission.SEND_SMS),12); else GatewayWorker.pair(this@MainActivity); status.text="در حال Pair شدن…" } }
-        box.addView(pair)
-        val sync=Button(this).apply { text="Sync now"; setOnClickListener { GatewayWorker.enqueue(this@MainActivity); status.text="Sync در صف قرار گرفت." } };box.addView(sync)
-        status=TextView(this).apply { text="توکن با Android Keystore رمز می‌شود؛ گزارش‌های ارسال در قطعی اینترنت محلی صف می‌شوند."; textSize=14f };box.addView(status)
-        setContentView(ScrollView(this).apply { addView(box) })
-        val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val periodic=PeriodicWorkRequestBuilder<GatewayWorker>(15,TimeUnit.MINUTES).setConstraints(constraints).build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("gateway-heartbeat",ExistingPeriodicWorkPolicy.UPDATE,periodic)
-        if(SecretStore.get(this,"token")!=null) GatewayWorker.enqueue(this);if(ReportQueue.queued(this))ReportQueue.schedule(this)
+    private lateinit var phoneInput: EditText
+    private lateinit var messageInput: EditText
+    private lateinit var consent: CheckBox
+
+    private data class Channel(val name: String, val badge: String, val color: Int, val sms: Boolean)
+
+    private val channels = listOf(
+        Channel("ارسال SMS", "SMS", Color.rgb(28, 142, 92), true),
+        Channel("روبیکا", "ر", Color.rgb(116, 74, 183), false),
+        Channel("بله", "ب", Color.rgb(0, 145, 214), false),
+        Channel("سروش پلاس", "س", Color.rgb(26, 112, 179), false)
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor = Color.rgb(246, 248, 252)
+        window.navigationBarColor = Color.rgb(246, 248, 252)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        showHome()
+        askInitialPermissions()
+    }
+
+    private fun askInitialPermissions() {
+        val missing = arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.SEND_SMS)
+            .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), requestPermissionsCode)
+    }
+
+    override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
+        super.onRequestPermissionsResult(code, permissions, results)
+        if (code == requestPermissionsCode || code == requestContactCode) {
+            if (permissions.indices.any { permissions[it] == Manifest.permission.READ_CONTACTS && results.getOrNull(it) == PackageManager.PERMISSION_GRANTED }) {
+                status.text = "مجوز مخاطبان فعال شد. برای SMS نیز مجوز ارسال لازم است."
+            } else if (code == requestContactCode) status.text = "برای انتخاب مخاطب، مجوز دفترچه تلفن لازم است."
+        }
+    }
+
+    private fun showHome() {
+        activeChannel = null
+        root = pageRoot()
+        root.addView(label("اعتبارامی", 27f, Color.rgb(24, 34, 52), true))
+        root.addView(label("ارسال از گوشی خودتان", 15f, Color.rgb(102, 113, 132)))
+        root.addView(spacer(18))
+        channels.forEach { channel -> root.addView(channelTile(channel)) }
+        root.addView(spacer(14))
+        root.addView(label("SMS از سیم‌کارت این گوشی ارسال می‌شود. برای پیام‌رسان‌ها، انتخاب گفت‌وگو و تأیید نهایی در برنامهٔ همان پیام‌رسان انجام می‌شود.", 14f, Color.rgb(92, 104, 122)))
+        root.addView(spacer(12))
+        root.addView(label("مجوز مخاطبان و SMS فقط روی گوشی درخواست می‌شود؛ کد فعال‌سازی یا Pair لازم نیست.", 13f, Color.rgb(120, 130, 145)))
+        status = label("آماده", 14f, Color.rgb(31, 113, 82))
+        root.addView(status)
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
+    }
+
+    private fun channelTile(channel: Channel): View {
+        val tile = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(Color.WHITE, channel.color, 2, 16)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showComposer(channel) }
+        }
+        val badge = TextView(this).apply {
+            text = channel.badge
+            textSize = if (channel.badge.length > 2) 12f else 18f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(channel.color) }
+        }
+        tile.addView(badge, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, dp(8), 0) }
+        column.addView(label(channel.name, 17f, Color.rgb(30, 40, 58), true))
+        column.addView(label(if (channel.sms) "ارسال با سیم‌کارت" else "باز کردن امکانات ${channel.name}", 13f, Color.rgb(112, 123, 140)))
+        tile.addView(column, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        tile.addView(label("‹", 27f, channel.color, true))
+        return tile
+    }
+
+    private fun showComposer(channel: Channel) {
+        activeChannel = channel
+        root = pageRoot()
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        val back = Button(this).apply { text = "بازگشت"; setOnClickListener { showHome() } }
+        header.addView(back)
+        header.addView(label(channel.name, 22f, channel.color, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(header)
+        root.addView(spacer(12))
+
+        if (channel.sms) {
+            root.addView(label("گیرنده", 15f, Color.rgb(48, 59, 76), true))
+            phoneInput = EditText(this).apply {
+                hint = "شماره یا مخاطب انتخاب‌شده"
+                setSingleLine(true)
+                inputType = android.text.InputType.TYPE_CLASS_PHONE
+                textDirection = View.TEXT_DIRECTION_LTR
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+            }
+            root.addView(phoneInput, matchWidth())
+            root.addView(actionButton("انتخاب از مخاطبان گوشی", channel.color) { pickContact() })
+        } else {
+            root.addView(label("مخاطب یا گروه را در خود برنامهٔ پیام‌رسان انتخاب می‌کنید.", 15f, Color.rgb(74, 86, 104)))
+            root.addView(label("برای حفظ حساب شخصی شما، اپ پیام را به برنامهٔ نصب‌شده می‌سپارد؛ انتخاب گیرنده و زدن دکمهٔ ارسال در همان برنامه انجام می‌شود.", 13f, Color.rgb(105, 116, 132)))
+        }
+
+        root.addView(spacer(10))
+        root.addView(label("متن پیام", 15f, Color.rgb(48, 59, 76), true))
+        messageInput = EditText(this).apply {
+            hint = "متن پیام را بنویسید"
+            minLines = 4
+            gravity = Gravity.TOP or Gravity.START
+            textDirection = View.TEXT_DIRECTION_RTL
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        root.addView(messageInput, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(128)))
+        val counter = label("0 نویسه · حدود 1 بخش پیام", 12f, Color.rgb(115, 125, 141))
+        root.addView(counter)
+        messageInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val text = s?.toString().orEmpty()
+                val unicode = text.any { it.code > 127 }
+                val perPart = if (unicode) 67 else 153
+                val singlePart = if (unicode) 70 else 160
+                val segments = if (text.length <= singlePart) 1 else (text.length + perPart - 1) / perPart
+                counter.text = "${text.length} نویسه · ${if (unicode) "Unicode" else "GSM"} · حدود $segments بخش پیام"
+            }
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
+
+        if (channel.sms) {
+            consent = CheckBox(this).apply { text = "این گیرنده برای دریافت پیام رضایت دارد"; textSize = 14f }
+            root.addView(consent)
+            root.addView(actionButton("پیش‌نمایش و ارسال SMS", channel.color) { confirmSms() })
+        } else {
+            root.addView(actionButton("باز کردن گزینه‌های ارسال", channel.color) { shareToMessenger() })
+        }
+        status = label("", 14f, Color.rgb(31, 113, 82))
+        root.addView(status)
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
+    }
+
+    private fun pickContact() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), requestContactCode)
+            return
+        }
+        val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, 1)
+    }
+
+    @Deprecated("Legacy activity result API kept for Android 8 compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 1 || resultCode != RESULT_OK) return
+        val uri: Uri = data?.data ?: return
+        contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { cursor: Cursor ->
+            if (cursor.moveToFirst()) phoneInput.setText(cursor.getString(0))
+        }
+    }
+
+    private fun confirmSms() {
+        val phone = phoneInput.text.toString().trim()
+        val body = messageInput.text.toString().trim()
+        if (phone.isBlank() || !PhoneNumberUtils.isGlobalPhoneNumber(phone)) { status.text = "شمارهٔ گیرنده را درست وارد یا از مخاطبان انتخاب کنید."; return }
+        if (body.isBlank()) { status.text = "متن پیام خالی است."; return }
+        if (!consent.isChecked) { status.text = "برای ادامه، تأیید کنید گیرنده رضایت دریافت پیام دارد."; return }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.SEND_SMS), requestPermissionsCode)
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("تأیید ارسال SMS")
+            .setMessage("به: $phone\n\n$body\n\nارسال با سیم‌کارت انتخاب‌شده در گوشی انجام می‌شود.")
+            .setNegativeButton("بازبینی", null)
+            .setPositiveButton("ارسال") { _, _ ->
+                try {
+                    SmsSender.send(this, System.currentTimeMillis(), phone, body, localOnly = true)
+                    status.text = "درخواست ارسال به سیستم گوشی سپرده شد؛ نتیجه با اعلان سیستم ثبت می‌شود."
+                } catch (e: Exception) {
+                    status.text = "ارسال انجام نشد: ${e.localizedMessage ?: "خطای SMS"}"
+                }
+            }.show()
+    }
+
+    private fun shareToMessenger() {
+        val body = messageInput.text.toString().trim()
+        if (body.isBlank()) { status.text = "متن پیام را وارد کنید."; return }
+        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, body) }
+        try {
+            startActivity(Intent.createChooser(send, "انتخاب برنامه برای ادامهٔ ارسال"))
+            status.text = "در برنامهٔ مقصد، گفت‌وگو یا گروه را انتخاب و ارسال را تأیید کنید."
+        } catch (_: Exception) { status.text = "هیچ برنامه‌ای برای اشتراک‌گذاری متن پیدا نشد." }
+    }
+
+    private fun pageRoot() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutDirection = View.LAYOUT_DIRECTION_RTL
+        setPadding(dp(20), dp(20), dp(20), dp(28))
+        setBackgroundColor(Color.rgb(246, 248, 252))
+    }
+
+    private fun label(textValue: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+        text = textValue
+        textSize = size
+        setTextColor(color)
+        if (bold) setTypeface(typeface, Typeface.BOLD)
+        gravity = Gravity.START
+        setPadding(0, dp(4), 0, dp(4))
+    }
+
+    private fun actionButton(textValue: String, color: Int, action: () -> Unit) = Button(this).apply {
+        text = textValue
+        setTextColor(Color.WHITE)
+        background = rounded(color, color, 1, 12)
+        setOnClickListener { action() }
+    }
+
+    private fun matchWidth() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    private fun spacer(height: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(height)) }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun rounded(fill: Int, stroke: Int, strokeDp: Int, radiusDp: Int) = GradientDrawable().apply {
+        setColor(fill)
+        setStroke(dp(strokeDp), stroke)
+        cornerRadius = dp(radiusDp).toFloat()
     }
 }
