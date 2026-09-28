@@ -32,6 +32,13 @@ function db(): PDO {
             $pdo->exec('CREATE INDEX IF NOT EXISTS media_library_created_at ON media_library(created_at DESC,id DESC)');
             $pdo->exec('PRAGMA user_version = 2'); $pdo->commit();
         }
+        $version=(int)$pdo->query('PRAGMA user_version')->fetchColumn();
+        if ($version < 3) {
+            $pdo->beginTransaction();
+            $pdo->exec("CREATE TABLE IF NOT EXISTS gateway_enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL UNIQUE, poll_secret_hash TEXT NOT NULL, device_name TEXT NOT NULL, phone_number TEXT, operator_name TEXT, device_model TEXT, android_version TEXT, app_version TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','claimed','expired')), gateway_id INTEGER, token_enc TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, handled_at TEXT, FOREIGN KEY(gateway_id) REFERENCES gateways(id) ON DELETE SET NULL)");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS gateway_enrollments_status_created ON gateway_enrollments(status,created_at DESC)');
+            $pdo->exec('PRAGMA user_version = 3'); $pdo->commit();
+        }
     }
     return $pdo;
 }
