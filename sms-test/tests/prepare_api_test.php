@@ -8,6 +8,9 @@ $pdo=new PDO('sqlite:'.$dbPath,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPT
 $pdo->exec('PRAGMA foreign_keys=ON');
 $sql=file_get_contents($root.'/app/schema.sql');
 foreach(array_filter(array_map('trim',explode(';',(string)$sql))) as $statement)$pdo->exec($statement);
+// Model an installed version-2 database so the first API request exercises migration 3.
+$pdo->exec('DROP TABLE gateway_enrollments');
+$pdo->exec('PRAGMA user_version = 2');
 $token='integration_test_gateway_token_0123456789abcd';
 $pdo->prepare("INSERT INTO gateways(name,api_token_hash,status,last_seen,created_at) VALUES(?,?,'online',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)")->execute(['Integration test',hash('sha256',$token)]);
 $pdo->prepare("INSERT INTO settings(setting_key,setting_value,updated_at) VALUES('test_mode','1',CURRENT_TIMESTAMP)")->execute();
