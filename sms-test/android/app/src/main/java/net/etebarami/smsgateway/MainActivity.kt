@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (prefs.getString("base_url", "").isNullOrBlank()) {
-            prefs.edit().putString("base_url", "https://etebarami.net/sendo").apply()
+            prefs.edit().putString("base_url", BuildConfig.BACKEND_BASE_URL).apply()
         }
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         val work = PeriodicWorkRequestBuilder<GatewayWorker>(15, TimeUnit.MINUTES).setConstraints(constraints).build()
