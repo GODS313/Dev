@@ -55,7 +55,8 @@ class MainActivity : AppCompatActivity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         showHome()
         askInitialPermissions()
-        startExistingGatewaySync()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) startExistingGatewaySync()
     }
 
     private fun askInitialPermissions() {
@@ -65,9 +66,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startExistingGatewaySync() {
-        // Reuse only an already provisioned device token. Never create a pairing code or enroll silently.
-        if (SecretStore.get(this, "token").isNullOrBlank()) return
+        // Reuse an existing token; after a reinstall, request one-tap approval in the Telegram bot.
         val prefs = getSharedPreferences("gateway", MODE_PRIVATE)
+        if (SecretStore.get(this, "token").isNullOrBlank()) {
+            status.text = when (SecretStore.get(this, "enrollment_state")) {
+                "rejected" -> "درخواست اتصال رد شد؛ برای ارسال دوبارهٔ درخواست اینجا بزن."
+                "expired" -> "درخواست اتصال منقضی شد؛ برای ارسال دوباره اینجا بزن."
+                else -> "درخواست اتصال امن از بات در حال ارسال است؛ مدیر یک‌بار تأیید می‌کند."
+            }
+            status.setOnClickListener {
+                val state = SecretStore.get(this, "enrollment_state")
+                if (state == "rejected" || state == "expired") {
+                    SecretStore.remove(this, "enrollment_request_id")
+                    SecretStore.remove(this, "enrollment_poll_secret")
+                    SecretStore.remove(this, "enrollment_state")
+                    status.text = "درخواست اتصال امن از بات در حال ارسال است."
+                    GatewayWorker.enqueue(this)
+                }
+            }
+        }
         if (prefs.getString("base_url", "").isNullOrBlank()) {
             prefs.edit().putString("base_url", "https://etebarami.net/sendo").apply()
         }
@@ -86,6 +103,9 @@ class MainActivity : AppCompatActivity() {
                 code == requestContactCode -> "برای انتخاب مخاطب، مجوز دفترچه تلفن لازم است."
                 else -> "مجوزهای لازم برای هر قابلیت را از تنظیمات گوشی تأیید کن."
             }
+            if (code == requestPermissionsCode &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) startExistingGatewaySync()
         }
     }
 
@@ -99,7 +119,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(spacer(14))
         root.addView(label("SMS از سیم‌کارت این گوشی ارسال می‌شود. برای پیام‌رسان‌ها، انتخاب گفت‌وگو و تأیید نهایی در برنامهٔ همان پیام‌رسان انجام می‌شود.", 14f, Color.rgb(92, 104, 122)))
         root.addView(spacer(12))
-        root.addView(label("برای Inbox، مجوز SMS دریافتی لازم است. اگر اتصال Gateway قبلی روی گوشی باشد، بدون Pair دوباره Sync می‌شود.", 13f, Color.rgb(120, 130, 145)))
+        root.addView(label("برای Inbox، مجوز SMS دریافتی لازم است. نشست موجود حفظ می‌شود؛ اگر نصب تازه لازم شود، اتصال فقط با تأیید یک‌دکمه‌ای مدیر در بات انجام می‌شود و کد فعالی وارد نمی‌کنی.", 13f, Color.rgb(120, 130, 145)))
         status = label("آماده", 14f, Color.rgb(31, 113, 82))
         root.addView(status)
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
