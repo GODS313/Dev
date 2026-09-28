@@ -14,6 +14,7 @@ import android.telephony.PhoneNumberUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import android.content.ClipData
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -28,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var phoneInput: EditText
     private lateinit var messageInput: EditText
     private lateinit var consent: CheckBox
+    private lateinit var imageStatus: TextView
+    private var selectedImage: Uri? = null
 
     private data class Channel(val name: String, val badge: String, val color: Int, val sms: Boolean)
 
@@ -109,6 +112,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showComposer(channel: Channel) {
         activeChannel = channel
+        selectedImage = null
         root = pageRoot()
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
         val back = Button(this).apply { text = "بازگشت"; setOnClickListener { showHome() } }
@@ -129,8 +133,8 @@ class MainActivity : AppCompatActivity() {
             root.addView(phoneInput, matchWidth())
             root.addView(actionButton("انتخاب از مخاطبان گوشی", channel.color) { pickContact() })
         } else {
-            root.addView(label("مخاطب یا گروه را در خود برنامهٔ پیام‌رسان انتخاب می‌کنید.", 15f, Color.rgb(74, 86, 104)))
-            root.addView(label("برای حفظ حساب شخصی شما، اپ پیام را به برنامهٔ نصب‌شده می‌سپارد؛ انتخاب گیرنده و زدن دکمهٔ ارسال در همان برنامه انجام می‌شود.", 13f, Color.rgb(105, 116, 132)))
+            root.addView(label("مخاطب یا گروه را از پیشنهادهای همان پیام‌رسان یا داخل برنامه انتخاب کنید.", 15f, Color.rgb(74, 86, 104)))
+            root.addView(label("انتخاب مخاطب و ارسال نهایی در پیام‌رسان انجام می‌شود تا با حساب شخصی شما باشد.", 13f, Color.rgb(105, 116, 132)))
         }
 
         root.addView(spacer(10))
@@ -163,6 +167,9 @@ class MainActivity : AppCompatActivity() {
             root.addView(consent)
             root.addView(actionButton("پیش‌نمایش و ارسال SMS", channel.color) { confirmSms() })
         } else {
+            root.addView(actionButton("انتخاب تصویر از گالری", channel.color) { pickImage() })
+            imageStatus = label("تصویری انتخاب نشده", 13f, Color.rgb(105, 116, 132))
+            root.addView(imageStatus)
             root.addView(actionButton("باز کردن گزینه‌های ارسال", channel.color) { shareToMessenger() })
         }
         status = label("", 14f, Color.rgb(31, 113, 82))
@@ -183,11 +190,26 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Legacy activity result API kept for Android 8 compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 2 && resultCode == RESULT_OK) {
+            selectedImage = data?.data
+            imageStatus.text = if (selectedImage == null) "تصویری انتخاب نشده" else "تصویر انتخاب شد و همراه متن ارسال می‌شود."
+            return
+        }
         if (requestCode != 1 || resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
         contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { cursor: Cursor ->
             if (cursor.moveToFirst()) phoneInput.setText(cursor.getString(0))
         }
+    }
+
+    private fun pickImage() {
+        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(picker, 2)
     }
 
     private fun confirmSms() {
@@ -216,11 +238,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun shareToMessenger() {
         val body = messageInput.text.toString().trim()
-        if (body.isBlank()) { status.text = "متن پیام را وارد کنید."; return }
-        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, body) }
+        val image = selectedImage
+        if (body.isBlank() && image == null) { status.text = "متن پیام یا تصویر را انتخاب کنید."; return }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            if (image != null) {
+                type = contentResolver.getType(image) ?: "image/*"
+                putExtra(Intent.EXTRA_STREAM, image)
+                clipData = ClipData.newUri(contentResolver, "تصویر انتخاب‌شده", image)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } else type = "text/plain"
+            if (body.isNotBlank()) putExtra(Intent.EXTRA_TEXT, body)
+        }
         try {
-            startActivity(Intent.createChooser(send, "انتخاب برنامه برای ادامهٔ ارسال"))
-            status.text = "در برنامهٔ مقصد، گفت‌وگو یا گروه را انتخاب و ارسال را تأیید کنید."
+            startActivity(Intent.createChooser(send, "انتخاب پیام‌رسان یا مخاطب"))
+            status.text = "در مقصد، مخاطب یا گروه را انتخاب و ارسال را تأیید کنید."
         } catch (_: Exception) { status.text = "هیچ برنامه‌ای برای اشتراک‌گذاری متن پیدا نشد." }
     }
 
