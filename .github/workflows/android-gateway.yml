@@ -21,9 +21,29 @@ jobs:
           unzip -q /tmp/gradle.zip -d /tmp
       - name: Build debug APK
         run: /tmp/gradle-8.10.2/bin/gradle --no-daemon -p sms-test/android :app:assembleDebug
+      - name: Build release APK with persistent signing key when configured
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Persistent release signing is not configured; debug APK remains available for testing."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ete-release.jks"
+          ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/ete-release.jks" /tmp/gradle-8.10.2/bin/gradle --no-daemon -p sms-test/android :app:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: etebarami-gateway-debug-apk
           path: sms-test/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: ${{ hashFiles('sms-test/android/app/build/outputs/apk/release/app-release.apk') != '' }}
+        with:
+          name: etebarami-gateway-release-apk
+          path: sms-test/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
