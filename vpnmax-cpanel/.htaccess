@@ -1,0 +1,5 @@
+Options -Indexes
+DirectoryIndex index.php
+<FilesMatch "^(README_FA\.md|\.htaccess)$">
+  Require all denied
+</FilesMatch>
