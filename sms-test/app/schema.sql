@@ -21,3 +21,5 @@ CREATE TABLE sms_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT, gateway_id INTEGER
 CREATE INDEX sms_inbox_received_at ON sms_inbox(received_at DESC,id DESC);
 CREATE TABLE media_library (id INTEGER PRIMARY KEY AUTOINCREMENT, file_id TEXT NOT NULL UNIQUE, file_unique_id TEXT, title TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'image/jpeg', size_bytes INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 CREATE INDEX media_library_created_at ON media_library(created_at DESC,id DESC);
+CREATE TABLE gateway_enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL UNIQUE, poll_secret_hash TEXT NOT NULL, device_name TEXT NOT NULL, phone_number TEXT, operator_name TEXT, device_model TEXT, android_version TEXT, app_version TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','claimed','expired')), gateway_id INTEGER, token_enc TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, handled_at TEXT, FOREIGN KEY(gateway_id) REFERENCES gateways(id) ON DELETE SET NULL);
+CREATE INDEX gateway_enrollments_status_created ON gateway_enrollments(status,created_at DESC);
