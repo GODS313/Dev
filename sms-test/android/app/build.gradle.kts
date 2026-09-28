@@ -15,7 +15,9 @@ android {
         targetSdk = 35
         versionCode = 7
         versionName = "0.7.0"
+        buildConfigField("String", "BACKEND_BASE_URL", "\"https://etebarami.net/sms-test\"")
     }
+    buildFeatures { buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -30,6 +32,7 @@ android {
         }
     }
     buildTypes {
+        debug { applicationIdSuffix = ".staging" }
         release {
             isMinifyEnabled = false
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
