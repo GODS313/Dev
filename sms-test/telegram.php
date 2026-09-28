@@ -49,6 +49,23 @@ function handle_callback(array $cb,string $adminChat): void {
     $chatId=(string)($cb['message']['chat']['id']??'');
     if ($chatId!==$adminChat || ($cb['message']['chat']['type']??'')!=='private') { answer_callback((string)($cb['id']??''),'دسترسی مجاز نیست.'); return; }
     $data=(string)($cb['data']??''); $flow=get_flow($chatId);
+    if (preg_match('/^enroll:approve:([a-f0-9]{32})$/',$data,$m)) {
+        $q=db()->prepare("SELECT device_name,device_model,android_version,phone_number,status,expires_at FROM gateway_enrollments WHERE request_id=?");$q->execute([$m[1]]);$en=$q->fetch();
+        if(!$en||$en['status']!=='pending'||strtotime((string)$en['expires_at'].' UTC')<time()){answer_callback((string)$cb['id'],'درخواست منقضی شده است.');return;}
+        $rows=db()->query('SELECT id,name,phone_number FROM gateways WHERE enabled=1 ORDER BY id DESC LIMIT 10')->fetchAll();$buttons=[];
+        foreach($rows as $g)$buttons[]=[['text'=>'اتصال به '.$g['name'].' '.($g['phone_number']??''),'callback_data'=>'enroll:bind:'.$m[1].':'.(int)$g['id']]];
+        $buttons[]=[['text'=>'ثبت به‌عنوان Gateway جدید','callback_data'=>'enroll:bind:'.$m[1].':0']];
+        answer_callback((string)$cb['id'],'گوشی را به Gateway قبلی وصل کنید یا دستگاه جدید بسازید.');
+        send_bot($chatId,"درخواست گوشی تأیید اولیه شد. مقصد اتصال را انتخاب کن:\n".$en['device_name'].' | '.$en['device_model'].' | Android '.$en['android_version'],$buttons?['inline_keyboard'=>$buttons]:[]);return;
+    }
+    if (preg_match('/^enroll:reject:([a-f0-9]{32})$/',$data,$m)) {
+        $q=db()->prepare("UPDATE gateway_enrollments SET status='rejected',handled_at=CURRENT_TIMESTAMP WHERE request_id=? AND status='pending'");$q->execute([$m[1]]);
+        answer_callback((string)$cb['id'],$q->rowCount()?'درخواست رد شد.':'درخواست منقضی یا قبلاً بررسی شده است.');send_bot($chatId,'درخواست اتصال گوشی رد شد.');return;
+    }
+    if (preg_match('/^enroll:bind:([a-f0-9]{32}):([0-9]+)$/',$data,$m)) {
+        answer_callback((string)$cb['id'],'در حال اتصال گوشی…');
+        try{$msg=bind_enrollment($m[1],(int)$m[2]);send_bot($chatId,$msg);}catch(Throwable $e){send_bot($chatId,'اتصال انجام نشد: '.$e->getMessage());}return;
+    }
     if ($data==='sms:cancel') { clear_flow($chatId); answer_callback((string)$cb['id'],'لغو شد'); send_menu($chatId,'ارسال لغو شد.'); return; }
     if (preg_match('/^sms:gateway:([0-9]+)$/',$data,$match)) {
         if ($flow['state']!=='sms_choose_gateway') { answer_callback((string)$cb['id'],'این انتخاب منقضی شده است.'); return; }
@@ -71,6 +88,23 @@ function handle_callback(array $cb,string $adminChat): void {
     }
     if (preg_match('/^media:([0-9]+)$/',$data,$match)) { answer_callback((string)$cb['id']); send_media((int)$match[1],$chatId); return; }
     answer_callback((string)($cb['id']??''),'گزینه منقضی یا نامعتبر است.');
+}
+
+function bind_enrollment(string $requestId,int $gatewayId): string {
+    $pdo=db();$q=$pdo->prepare("SELECT * FROM gateway_enrollments WHERE request_id=? AND status='pending' AND expires_at>datetime('now')");$q->execute([$requestId]);$en=$q->fetch();
+    if(!$en)throw new RuntimeException('درخواست منقضی یا قبلاً بررسی شده است.');
+    $token=rtrim(strtr(base64_encode(random_bytes(48)),'+/','-_'),'=');$pdo->beginTransaction();
+    try{
+        if($gatewayId>0){$q=$pdo->prepare('SELECT id,name FROM gateways WHERE id=? AND enabled=1');$q->execute([$gatewayId]);$gateway=$q->fetch();if(!$gateway)throw new RuntimeException('Gateway انتخابی وجود ندارد.');
+            $pdo->prepare("UPDATE gateways SET api_token_hash=?,device_model=?,android_version=?,app_version=?,phone_number=COALESCE(?,phone_number),operator_name=COALESCE(?,operator_name),status='online',last_seen=CURRENT_TIMESTAMP WHERE id=?")
+                ->execute([hash('sha256',$token),$en['device_model'],$en['android_version'],$en['app_version'],$en['phone_number'],$en['operator_name'],$gatewayId]);$name=$gateway['name'];
+        }else{$name=trim($en['device_name'])?:'Android Gateway';$pdo->prepare("INSERT INTO gateways(name,phone_number,operator_name,device_model,android_version,app_version,api_token_hash,status,last_seen,created_at) VALUES(?,?,?,?,?,?,?,'online',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)")
+                ->execute([$name,$en['phone_number'],$en['operator_name'],$en['device_model'],$en['android_version'],$en['app_version'],hash('sha256',$token)]);$gatewayId=(int)$pdo->lastInsertId();}
+        $pdo->prepare("UPDATE gateway_enrollments SET status='approved',gateway_id=?,token_enc=?,handled_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'")->execute([$gatewayId,enc($token),$en['id']]);
+        if($pdo->query('SELECT changes()')->fetchColumn()!=1)throw new RuntimeException('درخواست هم‌زمان تغییر کرده است.');
+        $pdo->commit();audit('gateway_enrollment_approved',['gateway_id'=>$gatewayId,'request_id'=>$requestId]);
+        return "✅ گوشی به Gateway «$name» متصل شد. اپ پس از Sync توکن امن را دریافت می‌کند؛ هیچ کد فعالی لازم نیست.";
+    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 
 function send_menu(string $chat,string $text): void {
