@@ -26,7 +26,7 @@ jobs:
           db = sqlite3.connect(':memory:')
           db.executescript(Path('sms-test/app/schema.sql').read_text(encoding='utf-8'))
           names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-          required = {'gateways', 'sms_inbox', 'telegram_flows', 'telegram_updates', 'media_library'}
+          required = {'gateways', 'sms_inbox', 'telegram_flows', 'telegram_updates', 'media_library', 'gateway_enrollments'}
           assert required <= names, f'missing tables: {required - names}'
           gateway_cols = {row[1] for row in db.execute('PRAGMA table_info(gateways)')}
           assert {'id', 'name'} <= gateway_cols
@@ -38,3 +38,5 @@ jobs:
           assert db.execute('SELECT COUNT(*) FROM sms_inbox').fetchone()[0] == 1
           print('SQLite schema and inbox idempotency: OK')
           PY
+      - name: Exercise authenticated API and enrollment failure path
+        run: bash sms-test/tests/api_smoke.sh
