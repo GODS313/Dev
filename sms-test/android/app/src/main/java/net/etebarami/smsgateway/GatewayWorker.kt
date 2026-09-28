@@ -22,7 +22,7 @@ class GatewayWorker(ctx: Context, params: WorkerParameters): CoroutineWorker(ctx
         try {
             var base=prefs.getString("base_url","")?:""
             if(base.isBlank()) {
-                base="https://etebarami.net/sendo"
+                base=BuildConfig.BACKEND_BASE_URL
                 prefs.edit().putString("base_url",base).apply()
             }
             require(base.startsWith("https://")){"HTTPS is required"}
