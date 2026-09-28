@@ -15,3 +15,9 @@ CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER,
 CREATE INDEX audit_logs_created_at ON audit_logs(created_at);
 CREATE TABLE api_rate_limits (bucket_key TEXT PRIMARY KEY, window_start TEXT NOT NULL, hits INTEGER NOT NULL);
 CREATE TABLE message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE telegram_flows (chat_id TEXT PRIMARY KEY, state TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL);
+CREATE TABLE telegram_updates (update_id INTEGER PRIMARY KEY, processed_at TEXT NOT NULL);
+CREATE TABLE sms_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT, gateway_id INTEGER NOT NULL, phone TEXT NOT NULL, body TEXT NOT NULL, remote_id TEXT NOT NULL, received_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(gateway_id,remote_id), FOREIGN KEY(gateway_id) REFERENCES gateways(id) ON DELETE CASCADE);
+CREATE INDEX sms_inbox_received_at ON sms_inbox(received_at DESC,id DESC);
+CREATE TABLE media_library (id INTEGER PRIMARY KEY AUTOINCREMENT, file_id TEXT NOT NULL UNIQUE, file_unique_id TEXT, title TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'image/jpeg', size_bytes INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE INDEX media_library_created_at ON media_library(created_at DESC,id DESC);
