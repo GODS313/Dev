@@ -11,7 +11,30 @@ ini_set('session.cookie_secure', $isHttps ? '1' : '0');
 ini_set('session.cookie_samesite', 'Strict');
 session_name('ete_sms_admin');
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-function db(): PDO { static $pdo; global $config; if (!$pdo) { $pdo = new PDO($config['dsn'], null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]); $pdo->exec('PRAGMA foreign_keys = ON'); $pdo->exec('PRAGMA busy_timeout = 5000'); $version=(int)$pdo->query('PRAGMA user_version')->fetchColumn(); if($version<1){$pdo->beginTransaction();$pdo->exec("CREATE TABLE IF NOT EXISTS message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");$pdo->exec('PRAGMA user_version = 1');$pdo->commit();} } return $pdo; }
+function db(): PDO {
+    static $pdo; global $config;
+    if (!$pdo) {
+        $pdo = new PDO($config['dsn'], null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+        $pdo->exec('PRAGMA foreign_keys = ON'); $pdo->exec('PRAGMA busy_timeout = 5000');
+        $version=(int)$pdo->query('PRAGMA user_version')->fetchColumn();
+        if ($version < 1) {
+            $pdo->beginTransaction();
+            $pdo->exec("CREATE TABLE IF NOT EXISTS message_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+            $pdo->exec('PRAGMA user_version = 1'); $pdo->commit(); $version=1;
+        }
+        if ($version < 2) {
+            $pdo->beginTransaction();
+            $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_flows (chat_id TEXT PRIMARY KEY, state TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL)");
+            $pdo->exec('CREATE TABLE IF NOT EXISTS telegram_updates (update_id INTEGER PRIMARY KEY, processed_at TEXT NOT NULL)');
+            $pdo->exec("CREATE TABLE IF NOT EXISTS sms_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT, gateway_id INTEGER NOT NULL, phone TEXT NOT NULL, body TEXT NOT NULL, remote_id TEXT NOT NULL, received_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(gateway_id,remote_id), FOREIGN KEY(gateway_id) REFERENCES gateways(id) ON DELETE CASCADE)");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS sms_inbox_received_at ON sms_inbox(received_at DESC,id DESC)');
+            $pdo->exec("CREATE TABLE IF NOT EXISTS media_library (id INTEGER PRIMARY KEY AUTOINCREMENT, file_id TEXT NOT NULL UNIQUE, file_unique_id TEXT, title TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'image/jpeg', size_bytes INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS media_library_created_at ON media_library(created_at DESC,id DESC)');
+            $pdo->exec('PRAGMA user_version = 2'); $pdo->commit();
+        }
+    }
+    return $pdo;
+}
 function e(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrf(): string { if (empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2hex(random_bytes(32)); return $_SESSION['csrf']; }
 function check_csrf(): void { if (!hash_equals($_SESSION['csrf'] ?? '', (string)($_POST['csrf'] ?? ''))) { http_response_code(419); exit('درخواست منقضی است؛ صفحه را تازه کنید.'); } }
@@ -32,4 +55,21 @@ function notify_telegram(string $event,string $message): void {
         $ch=curl_init('https://api.telegram.org/bot'.$token.'/sendMessage'); curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>http_build_query(['chat_id'=>$chat,'text'=>$message]),CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>8]); $response=curl_exec($ch); $code=curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch); $tg=json_decode((string)$response,true); $ok=$code===200&&is_array($tg)&&!empty($tg['ok']);
         $q=$pdo->prepare('INSERT INTO telegram_logs(event_type,result,detail,created_at) VALUES(?,?,?,CURRENT_TIMESTAMP)');$q->execute([substr($event,0,80),$ok?'success':'failed','HTTP '.$code]);
     } catch(Throwable $ignored) { /* Notifications must never break delivery or page requests. */ }
+}
+
+function telegram_settings(): array {
+    $q=db()->query("SELECT setting_key,setting_value FROM settings WHERE setting_key IN ('telegram_token','telegram_chat_id','telegram_webhook_secret')");
+    $s=[]; foreach($q as $row)$s[$row['setting_key']]=$row['setting_value'];
+    return ['token'=>dec($s['telegram_token']??''),'chat_id'=>(string)($s['telegram_chat_id']??''),'webhook_secret'=>dec($s['telegram_webhook_secret']??'')];
+}
+
+function telegram_api(string $method,array $params=[]): array {
+    $token=telegram_settings()['token'];
+    if($token===''||!function_exists('curl_init')) throw new RuntimeException('تنظیمات Bot Token یا افزونه cURL آماده نیست.');
+    $ch=curl_init('https://api.telegram.org/bot'.$token.'/'.$method);
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($params,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>12]);
+    $raw=curl_exec($ch); $err=curl_error($ch); $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
+    $data=json_decode((string)$raw,true);
+    if($raw===false||$code!==200||!is_array($data)||empty($data['ok'])) throw new RuntimeException('Telegram API ناموفق بود: '.substr($err?:($data['description']??'HTTP '.$code),0,180));
+    return $data['result']??[];
 }
