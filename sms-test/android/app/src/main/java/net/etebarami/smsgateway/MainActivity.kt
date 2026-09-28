@@ -18,6 +18,12 @@ import android.content.ClipData
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 /** Local, user-controlled send UI. No backend pairing or activation code is needed. */
 class MainActivity : AppCompatActivity() {
@@ -49,20 +55,37 @@ class MainActivity : AppCompatActivity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         showHome()
         askInitialPermissions()
+        startExistingGatewaySync()
     }
 
     private fun askInitialPermissions() {
-        val missing = arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.SEND_SMS)
+        val missing = arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS)
             .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), requestPermissionsCode)
+    }
+
+    private fun startExistingGatewaySync() {
+        // Reuse only an already provisioned device token. Never create a pairing code or enroll silently.
+        if (SecretStore.get(this, "token").isNullOrBlank()) return
+        val prefs = getSharedPreferences("gateway", MODE_PRIVATE)
+        if (prefs.getString("base_url", "").isNullOrBlank()) {
+            prefs.edit().putString("base_url", "https://etebarami.net/sendo").apply()
+        }
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val work = PeriodicWorkRequestBuilder<GatewayWorker>(15, TimeUnit.MINUTES).setConstraints(constraints).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork("gateway-heartbeat", ExistingPeriodicWorkPolicy.UPDATE, work)
+        GatewayWorker.enqueue(this)
     }
 
     override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code, permissions, results)
         if (code == requestPermissionsCode || code == requestContactCode) {
-            if (permissions.indices.any { permissions[it] == Manifest.permission.READ_CONTACTS && results.getOrNull(it) == PackageManager.PERMISSION_GRANTED }) {
-                status.text = "مجوز مخاطبان فعال شد. برای SMS نیز مجوز ارسال لازم است."
-            } else if (code == requestContactCode) status.text = "برای انتخاب مخاطب، مجوز دفترچه تلفن لازم است."
+            val accepted = permissions.indices.filter { results.getOrNull(it) == PackageManager.PERMISSION_GRANTED }.map { permissions[it] }.toSet()
+            status.text = when {
+                Manifest.permission.RECEIVE_SMS in accepted -> "مجوز Inbox فعال شد؛ پیام‌های دریافتی پس از Sync به بات مدیر می‌رسند."
+                code == requestContactCode -> "برای انتخاب مخاطب، مجوز دفترچه تلفن لازم است."
+                else -> "مجوزهای لازم برای هر قابلیت را از تنظیمات گوشی تأیید کن."
+            }
         }
     }
 
@@ -76,7 +99,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(spacer(14))
         root.addView(label("SMS از سیم‌کارت این گوشی ارسال می‌شود. برای پیام‌رسان‌ها، انتخاب گفت‌وگو و تأیید نهایی در برنامهٔ همان پیام‌رسان انجام می‌شود.", 14f, Color.rgb(92, 104, 122)))
         root.addView(spacer(12))
-        root.addView(label("مجوز مخاطبان و SMS فقط روی گوشی درخواست می‌شود؛ کد فعال‌سازی یا Pair لازم نیست.", 13f, Color.rgb(120, 130, 145)))
+        root.addView(label("برای Inbox، مجوز SMS دریافتی لازم است. اگر اتصال Gateway قبلی روی گوشی باشد، بدون Pair دوباره Sync می‌شود.", 13f, Color.rgb(120, 130, 145)))
         status = label("آماده", 14f, Color.rgb(31, 113, 82))
         root.addView(status)
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
