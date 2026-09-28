@@ -1,0 +1,40 @@
+name: SMS Gateway checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sms-test/**'
+      - '.github/workflows/sms-gateway-checks.yml'
+  workflow_dispatch:
+jobs:
+  php-and-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, openssl, pdo_sqlite, sqlite3
+      - name: Lint PHP source
+        run: find sms-test -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Validate SQLite schema and inbox idempotency
+        run: |
+          python3 - <<'PY'
+          import sqlite3
+          from pathlib import Path
+
+          db = sqlite3.connect(':memory:')
+          db.executescript(Path('sms-test/app/schema.sql').read_text(encoding='utf-8'))
+          names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+          required = {'gateways', 'sms_inbox', 'telegram_flows', 'telegram_updates', 'media_library'}
+          assert required <= names, f'missing tables: {required - names}'
+          gateway_cols = {row[1] for row in db.execute('PRAGMA table_info(gateways)')}
+          assert {'id', 'name'} <= gateway_cols
+          db.execute("INSERT INTO gateways(name,api_token_hash,enabled,status,created_at) VALUES('test','hash',1,'online',CURRENT_TIMESTAMP)")
+          row = (1, '+989120000000', 'test', 'a' * 64, '2026-09-28T00:00:00Z', '2026-09-28T00:00:00Z')
+          sql = 'INSERT OR IGNORE INTO sms_inbox(gateway_id,phone,body,remote_id,received_at,created_at) VALUES(?,?,?,?,?,?)'
+          db.execute(sql, row)
+          db.execute(sql, row)
+          assert db.execute('SELECT COUNT(*) FROM sms_inbox').fetchone()[0] == 1
+          print('SQLite schema and inbox idempotency: OK')
+          PY
