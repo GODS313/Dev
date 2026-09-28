@@ -92,7 +92,7 @@ class GatewayWorker(ctx: Context, params: WorkerParameters): CoroutineWorker(ctx
         }
         val rid=URLEncoder.encode(requestIdValue,"UTF-8");val secret=URLEncoder.encode(pollSecretValue,"UTF-8")
         val state=request(base,"GET","/api/gateway/enrollment/status?request_id=$rid&poll_secret=$secret",null,null)
-        when(state.optString("status")) {
+        return when(state.optString("status")) {
             "approved" -> {
                 val issued=state.optString("token")
                 if(issued.length<32) throw IllegalStateException("Approved connection did not return a token")
